@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "al-qari-server"
+version = "1.0.0"
+description = "Backend for Al-Qari app - Quran transcription and processing server"
+authors = ["Eldar <lopio.lololozka@gmail.com>", "Amir <klaccamirmurtazaev2007@gmail.com>"]
+license = "MIT"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+fastapi = ">=0.115.0,<1.0.0"
+uvicorn = ">=0.34.0,<1.0.0"
+# python-multipart = ">=0.0.20,<1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0,<9.0.0"
+ruff = ">=0.6.0,<1.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
