@@ -1,0 +1,4 @@
+.env filter=strip
+
+# git config filter.strip.clean "sed 's/^\([A-Z_][A-Z_0-9]*\)=.*/\1=your-\L\1/'"       
+# git config filter.strip.smudge cat  
