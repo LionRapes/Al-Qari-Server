@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "al-qari-server"
+name = "app"
 version = "1.0.0"
 description = "Backend for Al-Qari app - Quran transcription and processing server"
 authors = ["Eldar <lopio.lololozka@gmail.com>", "Amir <klaccamirmurtazaev2007@gmail.com>"]
@@ -10,7 +10,12 @@ package-mode = false
 python = ">=3.10,<4.0"
 fastapi = ">=0.115.0,<1.0.0"
 uvicorn = ">=0.34.0,<1.0.0"
+boto3 = "^1.43.79"
+python-dotenv = "^1.2.3"
 # python-multipart = ">=0.0.20,<1.0.0"
+
+[tool.poetry.scripts]
+server = "app.main:start"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0,<9.0.0"
