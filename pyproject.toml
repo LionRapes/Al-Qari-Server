@@ -15,7 +15,8 @@ python-dotenv = "^1.2.3"
 # python-multipart = ">=0.0.20,<1.0.0"
 
 [tool.poetry.scripts]
-server = "app.main:start"
+run = "app.main:run"
+prod = "app.main:prod"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0,<9.0.0"
