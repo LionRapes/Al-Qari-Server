@@ -1,19 +1,22 @@
 import json
 import boto3
+import ydb
+
+from app.interfaces import YdbInterface
 from botocore.exceptions import ClientError
 from app.interfaces import StorageInterface
-from app.config import settings
+from app.config import storageSettings, ydbSettings
 
 class YandexS3Storage(StorageInterface):
     def __init__(self):
         self.s3_client = boto3.client(
             "s3",
-            endpoint_url=settings.S3_ENDPOINT,
-            aws_access_key_id=settings.AWS_ACCESS_KEY,
-            aws_secret_access_key=settings.AWS_SECRET_KEY,
-            region_name=settings.REGION,
+            endpoint_url=storageSettings.S3_ENDPOINT,
+            aws_access_key_id=storageSettings.AWS_ACCESS_KEY,
+            aws_secret_access_key=storageSettings.AWS_SECRET_KEY,
+            region_name=storageSettings.REGION,
         )
-        self.bucket = settings.BUCKET_NAME
+        self.bucket = storageSettings.BUCKET_NAME
 
     def fetch_json(self, file_path: str) -> str:
         try:
@@ -39,3 +42,54 @@ class YandexS3Storage(StorageInterface):
             return url
         except Exception:
             return None
+        
+    
+    async def upload(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket,
+                Key=key,
+                Body=data,
+                ContentType=content_type
+            )
+        except ClientError as e:
+            raise RuntimeError(f"Failed to upload file '{key}' to S3: {str(e)}")
+        
+
+class YandexYdbStorage(YdbInterface):
+    def __init__(self):
+        driver_config = ydb.DriverConfig(
+            endpoint=ydbSettings.YDB_ENDPOINT,
+            database=ydbSettings.YDB_DATABASE,
+            credentials=ydb.credentials_from_env_variables()
+        )
+        
+        self.driver = ydb.Driver(driver_config)
+        
+        try:
+            self.driver.wait(timeout=5, fail_fast=True)
+        except TimeoutError:
+            raise RuntimeError("Error connecting YDB")
+
+        self.pool = ydb.SessionPool(self.driver)
+
+    def execute(self, query: str, parameters: dict = None) -> list:
+        def callee(session: ydb.Session):
+            prepared = session.prepare(query)
+            
+            result_sets = session.transaction().execute(
+                prepared, 
+                parameters,
+                commit_tx=True
+            )
+            return result_sets
+
+        result = self.pool.retry_operation_sync(callee)
+        
+        if result and len(result) > 0:
+            return result[0].rows
+        return []
+
+    def close(self):
+        self.pool.stop()
+        self.driver.stop()

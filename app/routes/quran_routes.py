@@ -14,6 +14,14 @@ async def get_riwayah(
     return fetch_from_storage(storage, f"quran/riwayah/{riwayah_type}.json")
 
 
+@router.get("/quote/{lang}", summary="Get quotes")
+async def get_quotes(
+    lang: str,
+    storage: StorageInterface = Depends(get_storage),
+):
+    return fetch_from_storage(storage, f"quran/quote/quotes.{lang}.json")
+
+
 @router.get("/riwayah/{riwayah_type}/{surah_id}", summary="Get Surah by riwayah")
 async def get_surah(
     riwayah_type: str,
@@ -95,7 +103,6 @@ async def get_surah_audio(
     storage: StorageInterface = Depends(get_storage),
 ):
     file_path = f"quran/audio/{riwayah_type}/{reciter_name}_{bitrate}/{surah_id:03d}.mp3"
-    print(file_path)
     
     url = await storage.create_presigned_url(file_path, expires_in=900)
     if url is None:

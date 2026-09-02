@@ -39,11 +39,10 @@ tag:
 
 push:
 	docker build --provenance=false -t $(IMAGE_NAME)_deploy:${TAG} .
-	sleep 2
+	powershell -Command "Start-Sleep -Seconds 2"
 	docker tag $(IMAGE_NAME)_deploy:$(TAG) cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG)
-	sleep 2
+	powershell -Command "Start-Sleep -Seconds 2"
 	docker push cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG)
-	sleep 2
-	
-	docker rmi $(IMAGE_NAME)_deploy:$(TAG) 2>/dev/null || true
-	docker rmi cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG) 2>/dev/null || true
+	powershell -Command "Start-Sleep -Seconds 2"
+	docker rmi $(IMAGE_NAME)_deploy:$(TAG) 2>NUL || exit 0
+	docker rmi cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG) 2>NUL || exit 0

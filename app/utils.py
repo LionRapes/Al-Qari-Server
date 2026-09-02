@@ -1,5 +1,11 @@
+import jwt
+import smtplib
 from fastapi import HTTPException
 from app.interfaces import StorageInterface
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from app.config import mailSettings, jwtSettings
+from datetime import datetime, timedelta, timezone
 
 def fetch_from_storage(storage: StorageInterface, file_key: str):
     """Internal helper to fetch and parse JSON with proper HTTP error handling."""
@@ -11,3 +17,39 @@ def fetch_from_storage(storage: StorageInterface, file_key: str):
         raise HTTPException(status_code=500, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
+def ensure_str(v, encoding="utf-8"):
+    return v.decode(encoding) if isinstance(v, bytes) else v
+
+
+def send_magic_link_email(to_email: str, token: str):
+    magic_link = f"{mailSettings.FRONTEND_URL}/auth/verify?token={token}"
+    
+    msg = MIMEMultipart()
+    msg["From"] = mailSettings.SMTP_USER
+    msg["To"] = to_email
+    msg["Subject"] = "Вход в приложение Al-Qari"
+    
+    body = f"""
+    Здравствуйте!
+    
+    Для входа в аккаунт нажмите на ссылку ниже:
+    {magic_link}
+    
+    Ссылка действительна 15 минут. Если вы не запрашивали вход, просто проигнорируйте это письмо.
+    """
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    
+    try:
+        with smtplib.SMTP_SSL(mailSettings.SMTP_HOST, mailSettings.SMTP_PORT) as server:
+            server.login(mailSettings.SMTP_USER, mailSettings.SMTP_PASSWORD)
+            server.sendmail(mailSettings.SMTP_USER, to_email, msg.as_string())
+    except Exception as e:
+        print(e)
+        
+
+def create_access_token(user_id: str):
+    expire = datetime.now(timezone.utc) + timedelta(days=7)
+    to_encode = {"sub": user_id, "exp": expire}
+    return jwt.encode(to_encode, jwtSettings.JWT_SECRET_KEY, algorithm=jwtSettings.ALGORITHM)

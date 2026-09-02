@@ -3,3 +3,4 @@
 poetry.lock
 .venv
 *cache*
+NUL

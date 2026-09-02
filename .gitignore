@@ -1,3 +1,5 @@
 poetry.lock
 .venv
 *cache*
+authorized_key.json
+NUL
