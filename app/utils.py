@@ -1,11 +1,14 @@
 import jwt
 import smtplib
-from fastapi import HTTPException
 from app.interfaces import StorageInterface
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.config import mailSettings, jwtSettings
 from datetime import datetime, timedelta, timezone
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer
+
+security = HTTPBearer()
 
 def fetch_from_storage(storage: StorageInterface, file_key: str):
     """Internal helper to fetch and parse JSON with proper HTTP error handling."""
@@ -53,3 +56,27 @@ def create_access_token(user_id: str):
     expire = datetime.now(timezone.utc) + timedelta(days=7)
     to_encode = {"sub": user_id, "exp": expire}
     return jwt.encode(to_encode, jwtSettings.JWT_SECRET_KEY, algorithm=jwtSettings.ALGORITHM)
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, jwtSettings.JWT_SECRET_KEY, algorithms=[jwtSettings.ALGORITHM])
+        user_id: str = payload.get("sub") 
+        
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+            )
+        return user_id
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+        )

@@ -1,11 +1,12 @@
 import io
 import uuid
+from datetime import datetime
 from PIL import Image
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status, UploadFile, File
 from pydantic import BaseModel, EmailStr
 from app.interfaces import YdbInterface, StorageInterface
 from app.dependencies import get_ydb, get_storage
-from app.utils import ensure_str, send_magic_link_email, create_access_token
+from app.utils import ensure_str, send_magic_link_email, create_access_token, get_current_user
 from app.config import storageSettings
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -111,7 +112,18 @@ async def get_user(user_id: str, db: YdbInterface = Depends(get_ydb)):
     }
 
 @router.patch("/{user_id}", summary="Update user profile")
-async def update_user(user_id: str, data: UserUpdate, db: YdbInterface = Depends(get_ydb)):
+async def update_user(
+    user_id: str, 
+    data: UserUpdate, 
+    current_user_id: str = Depends(get_current_user),
+    db: YdbInterface = Depends(get_ydb)
+):
+    if current_user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="You can only update your own profile"
+        )
+
     check_query = "DECLARE $username AS Utf8; SELECT id FROM users WHERE username = $username;"
     existing = db.execute(check_query, {"$username": data.username})
     
@@ -135,9 +147,16 @@ async def update_user(user_id: str, data: UserUpdate, db: YdbInterface = Depends
 async def upload_avatar(
     user_id: str,
     file: UploadFile = File(...),
+    current_user_id: str = Depends(get_current_user),
     db: YdbInterface = Depends(get_ydb),
     storage: StorageInterface = Depends(get_storage)
 ):
+    if current_user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own avatar"
+        )
+
     file_content = await file.read()
 
     try:
@@ -152,7 +171,7 @@ async def upload_avatar(
         img.save(output, format="WEBP", quality=85)
         optimized_content = output.getvalue()
 
-        file_path = f"users/avatars/{user_id}.webp"
+        file_path = f"users/avatars/{user_id}_{int(datetime.now().timestamp())}.webp"
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid image file format")
 
@@ -171,7 +190,17 @@ async def upload_avatar(
 
 
 @router.delete("/{user_id}", summary="Delete user profile", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: str, db: YdbInterface = Depends(get_ydb)):
+async def delete_user(
+    user_id: str, 
+    current_user_id: str = Depends(get_current_user),
+    db: YdbInterface = Depends(get_ydb)
+):
+    if current_user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own account"
+        )
+
     query = "DECLARE $id AS Utf8; DELETE FROM users WHERE id = $id;"
     db.execute(query, {"$id": user_id})
     return None
