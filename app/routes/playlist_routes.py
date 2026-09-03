@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from app.interfaces import YdbInterface
 from app.dependencies import get_ydb
-from app.utils import ensure_str, get_current_user
+from app.utils import ensure_str, get_current_user, get_optional_current_user
 
 router = APIRouter(prefix="/playlists", tags=["Playlists"])
 
@@ -91,7 +91,8 @@ async def get_public_playlists(
         "offset": offset,
         "playlists": playlists
     }
-
+from fastapi import APIRouter, Query, Depends
+# ... your other imports ...
 
 @router.get("/search", summary="Search public playlists by title")
 async def search_public_playlists(
@@ -99,20 +100,33 @@ async def search_public_playlists(
     limit: int = Query(20, ge=1, le=100, description="Maximum results to return"),
     db: YdbInterface = Depends(get_ydb)
 ):
-    query = """
-    DECLARE $search_pattern AS Utf8;
-    DECLARE $limit AS Uint64;
+    words = list(set(word.strip() for word in q.split() if word.strip()))[:10]
+
+    if not words:
+        return {"query": q, "limit": limit, "playlists": []}
+
+    declare_statements = ["DECLARE $limit AS Uint64;"]
+    where_conditions = ["is_public = true"]
+    params = {"$limit": limit}
+
+    for i, word in enumerate(words):
+        param_name = f"$word_{i}"
+        declare_statements.append(f"DECLARE {param_name} AS Utf8;")
+        
+        where_conditions.append(f"title ILIKE {param_name}")
+        params[param_name] = f"%{word}%"
+
+    query = f"""
+    {chr(10).join(declare_statements)}
 
     SELECT id, owner_id, title, data, is_public, forked_from_id, created_at, updated_at
     FROM playlists
-    WHERE is_public = true AND title LIKE $search_pattern
+    WHERE {" AND ".join(where_conditions)}
     ORDER BY created_at DESC
     LIMIT $limit;
     """
-    result = db.execute(query, {
-        "$search_pattern": f"%{q}%",
-        "$limit": limit
-    })
+
+    result = db.execute(query, params)
 
     playlists = []
     if result:
@@ -134,11 +148,10 @@ async def search_public_playlists(
         "playlists": playlists
     }
 
-
 @router.get("/{playlist_id}", summary="Get a playlist by ID")
 async def get_playlist(
     playlist_id: str, 
-    current_user_id: str = Depends(get_current_user),
+    current_user_id: Optional[str] = Depends(get_optional_current_user),
     db: YdbInterface = Depends(get_ydb)
 ):
     query = """
@@ -149,28 +162,36 @@ async def get_playlist(
     result = db.execute(query, {"$id": playlist_id})
     if not result:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    
+
     playlist = result[0]
     is_public = playlist["is_public"]
     owner_id = ensure_str(playlist["owner_id"])
 
     if not is_public:
-        member_query = """
-        DECLARE $playlist_id AS Utf8;
-        DECLARE $user_id AS Utf8;
-        SELECT role FROM playlist_members 
-        WHERE playlist_id = $playlist_id AND user_id = $user_id;
-        """
-        member_result = db.execute(member_query, {
-            "$playlist_id": playlist_id,
-            "$user_id": current_user_id
-        })
-
-        if current_user_id != owner_id and not member_result:
+        if not current_user_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
-                detail="Access denied to this private playlist"
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required for private playlists",
+                headers={"WWW-Authenticate": "Bearer"},
             )
+
+        if current_user_id != owner_id:
+            member_query = """
+            DECLARE $playlist_id AS Utf8;
+            DECLARE $user_id AS Utf8;
+            SELECT role FROM playlist_members 
+            WHERE playlist_id = $playlist_id AND user_id = $user_id;
+            """
+            member_result = db.execute(member_query, {
+                "$playlist_id": playlist_id,
+                "$user_id": current_user_id
+            })
+
+            if not member_result:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Access denied to this private playlist"
+                )
 
     return {
         "id": ensure_str(playlist["id"]),
@@ -182,7 +203,7 @@ async def get_playlist(
         "created_at": playlist["created_at"],
         "updated_at": playlist["updated_at"]
     }
-
+    
 
 @router.patch("/{playlist_id}", summary="Update a playlist")
 async def update_playlist(

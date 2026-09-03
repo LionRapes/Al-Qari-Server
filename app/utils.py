@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 def fetch_from_storage(storage: StorageInterface, file_key: str):
     """Internal helper to fetch and parse JSON with proper HTTP error handling."""
@@ -58,25 +58,49 @@ def create_access_token(user_id: str):
     return jwt.encode(to_encode, jwtSettings.JWT_SECRET_KEY, algorithm=jwtSettings.ALGORITHM)
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    token = credentials.credentials
+def decode_access_token(token: str) -> str:
     try:
-        payload = jwt.decode(token, jwtSettings.JWT_SECRET_KEY, algorithms=[jwtSettings.ALGORITHM])
-        user_id: str = payload.get("sub") 
-        
+        payload = jwt.decode(
+            token, jwtSettings.JWT_SECRET_KEY, algorithms=[jwtSettings.ALGORITHM]
+        )
+        user_id: Optional[str] = payload.get("sub")
+
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
             )
         return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> str:
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return decode_access_token(credentials.credentials)
+
+
+async def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[str]:
+    if not credentials:
+        return None
+    return decode_access_token(credentials.credentials)
