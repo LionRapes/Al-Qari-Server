@@ -9,6 +9,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 class EmailRequest(BaseModel):
     email: EmailStr
+    lang: str
 
 class TokenVerify(BaseModel):
     token: str
@@ -19,11 +20,10 @@ class UserUpdate(BaseModel):
 
 @router.post("/auth/magic-link", summary="Request magic link for email")
 async def request_magic_link(
-    req: EmailRequest, 
-    background_tasks: BackgroundTasks, 
+    req: EmailRequest,
     service: UserService = Depends(get_user_service)
 ):
-    return service.request_magic_link(req.email, background_tasks)
+    return service.request_magic_link(req.email, req.lang)
 
 
 @router.post("/auth/verify", summary="Verify magic link and login/register")

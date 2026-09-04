@@ -13,13 +13,13 @@ class S3StorageSettings:
 
     
 class YDBSettings:
-    YDB_DATABASE = os.getenv("YDB_DATABASE")
+    YDB_DATABASE = os.getenv("YDB_DATABASE", "").strip()
     YDB_ENDPOINT = "grpcs://ydb.serverless.yandexcloud.net:2135"
     
 class MailSettings:
     SMTP_USER = os.getenv("SMTP_USER")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-    FRONTEND_URL = os.getenv("FRONTEND_URL")
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL")
     SMTP_HOST = "smtp.mail.ru"
     SMTP_PORT = 465
     

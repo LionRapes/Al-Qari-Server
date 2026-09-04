@@ -17,7 +17,7 @@ class PlaylistService:
         self.repo.create_playlist(
             playlist_id=playlist_id,
             owner_id=user_id,
-            title=playlist_data.title,
+            title=playlist_data.title.strip()[:32],
             data=playlist_data.data,
             is_public=playlist_data.is_public
         )

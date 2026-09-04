@@ -17,10 +17,10 @@ class UserService:
         self.repo = repo
         self.storage = storage
 
-    def request_magic_link(self, email: str, background_tasks: BackgroundTasks) -> dict:
+    def request_magic_link(self, email: str, lang: str) -> dict:
         token = str(uuid.uuid4())
         self.repo.create_magic_link(token, email)
-        background_tasks.add_task(send_magic_link_email, email, token)
+        send_magic_link_email(email, token, lang)
         return {"message": "Magic link sent"}
 
     def verify_magic_link(self, token: str) -> dict:
@@ -75,7 +75,7 @@ class UserService:
         if existing and ensure_str(existing["id"]) != user_id:
             raise HTTPException(status_code=400, detail="Username already taken")
 
-        self.repo.update_username(user_id, username)
+        self.repo.update_username(user_id, username.strip()[:24])
         return {"message": "Profile updated successfully"}
 
     async def upload_user_avatar(self, user_id: str, current_user_id: str, file_content: bytes) -> dict:

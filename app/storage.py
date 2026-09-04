@@ -57,14 +57,27 @@ class YandexS3Storage(StorageInterface):
             raise RuntimeError(f"Failed to upload file '{key}' to S3: {e!s}")
         
 
+import os
+import ydb
+
 class YandexYdbStorage(YdbInterface):
     def __init__(self):
-        driver_config = ydb.DriverConfig(
-            endpoint=ydbSettings.YDB_ENDPOINT,
-            database=ydbSettings.YDB_DATABASE,
-            credentials=ydb.credentials_from_env_variables()
-        )
+        endpoint = ydbSettings.YDB_ENDPOINT
+        database = ydbSettings.YDB_DATABASE
         
+        key_file = os.getenv("YDB_SERVICE_ACCOUNT_KEY_FILE")
+
+        if key_file and os.path.exists(key_file):
+            credentials = ydb.iam.ServiceAccountCredentials.from_file(key_file)
+        else:
+            credentials = ydb.iam.MetadataUrlCredentials()
+
+        driver_config = ydb.DriverConfig(
+            endpoint=endpoint,
+            database=database,
+            credentials=credentials
+        )
+        print(endpoint, database, credentials)
         self.driver = ydb.Driver(driver_config)
         
         try:

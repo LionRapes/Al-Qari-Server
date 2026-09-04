@@ -1,6 +1,7 @@
 .gitignore
 .gitattributes
 poetry.lock
+secrets
 .venv
 *cache*
 NUL

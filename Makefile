@@ -12,8 +12,7 @@ build:
 run:
 	docker run -d --name $(CONTAINER_NAME) -p $(PORT):8080 \
 	  --env-file .env \
-	  $(IMAGE_NAME) \
-	  python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
+	  $(IMAGE_NAME)
 
 dev:
 	docker run -d --name $(CONTAINER_NAME)-dev -p $(PORT):8080 \
@@ -38,11 +37,19 @@ tag:
 	docker tag $(IMAGE_NAME):$(TAG) cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG)
 
 push:
+	@if [ "$(REGISTRY_ID)" = "0" ]; then \
+		echo "ERROR: REGISTRY_ID is 0. Push cancelled."; \
+		exit 1; \
+	fi
+	
 	docker build --provenance=false -t $(IMAGE_NAME)_deploy:${TAG} .
 	powershell -Command "Start-Sleep -Seconds 2"
+
 	docker tag $(IMAGE_NAME)_deploy:$(TAG) cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG)
 	powershell -Command "Start-Sleep -Seconds 2"
+
 	docker push cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG)
 	powershell -Command "Start-Sleep -Seconds 2"
+	
 	docker rmi $(IMAGE_NAME)_deploy:$(TAG) 2>NUL || exit 0
 	docker rmi cr.yandex/$(REGISTRY_ID)/$(IMAGE_NAME):$(TAG) 2>NUL || exit 0

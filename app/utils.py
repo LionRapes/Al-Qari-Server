@@ -5,19 +5,40 @@ from email.mime.text import MIMEText
 
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials, APIKeyHeader
 
 from app.config import jwtSettings, mailSettings
 from app.interfaces import StorageInterface, YdbInterface
 
-security = HTTPBearer(auto_error=False)
+token_header = APIKeyHeader(name="X-Auth-Token", auto_error=False)
 
 
 # STORAGE
 
 
+EMAIL_TRANSLATIONS = {
+    "ru": {
+        "subject": "Вход в приложение Al-Qari",
+        "body": """Здравствуйте!
+
+Для входа в аккаунт нажмите на ссылку ниже:
+{magic_link}
+
+Ссылка действительна 15 минут. Если вы не запрашивали вход, просто проигнорируйте это письмо."""
+    },
+    "en": {
+        "subject": "Login to Al-Qari",
+        "body": """Hello!
+
+Click the link below to log into your account:
+{magic_link}
+
+The link is valid for 15 minutes. If you did not request this login, please ignore this email."""
+    }
+}
+
+
 def fetch_from_storage(storage: StorageInterface, file_key: str):
-    """Internal helper to fetch and parse JSON with proper HTTP error handling."""
     try:
         return storage.fetch_json(file_key)
     except FileNotFoundError as e:
@@ -31,22 +52,17 @@ def fetch_from_storage(storage: StorageInterface, file_key: str):
 # MAGIC LINK
 
 
-def send_magic_link_email(to_email: str, token: str):
-    magic_link = f"{mailSettings.FRONTEND_URL}/auth/verify?token={token}"
+def send_magic_link_email(to_email: str, token: str, lang: str = "en"):
+    magic_link = f"{mailSettings.FRONTEND_BASE_URL}/auth/verify?token={token}"
+    
+    t = EMAIL_TRANSLATIONS.get(lang, EMAIL_TRANSLATIONS["en"])
     
     msg = MIMEMultipart()
     msg["From"] = mailSettings.SMTP_USER
     msg["To"] = to_email
-    msg["Subject"] = "Вход в приложение Al-Qari"
+    msg["Subject"] = t["subject"]
     
-    body = f"""
-    Здравствуйте!
-    
-    Для входа в аккаунт нажмите на ссылку ниже:
-    {magic_link}
-    
-    Ссылка действительна 15 минут. Если вы не запрашивали вход, просто проигнорируйте это письмо.
-    """
+    body = t["body"].format(magic_link=magic_link)
     msg.attach(MIMEText(body, "plain", "utf-8"))
     
     try:
@@ -102,23 +118,23 @@ def ensure_str(v, encoding="utf-8"):
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Depends(token_header),
 ) -> str:
-    if not credentials:
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
         )
-    return decode_access_token(credentials.credentials)
+    
+    return decode_access_token(token)
 
 
 async def get_optional_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Depends(token_header),
 ) -> str | None:
-    if not credentials:
+    if not token:
         return None
-    return decode_access_token(credentials.credentials)
+    return decode_access_token(token)
   
   
 # PLAYLIST ROUTES
