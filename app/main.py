@@ -1,8 +1,10 @@
-import uvicorn
 import os
+
+import uvicorn
 from fastapi import FastAPI
-from app.routers import api_router
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.routers import api_router
 
 app = FastAPI(title="Al-Qari Server")
 

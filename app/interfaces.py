@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+
 class StorageInterface(ABC):
-    """Abstract interface for fetching data from storage."""
-    
     @abstractmethod
     def fetch_json(self, file_path: str) -> str:
         pass
@@ -18,5 +17,5 @@ class StorageInterface(ABC):
     
 class YdbInterface(ABC):
     @abstractmethod
-    def execute(self, query: str, parameters: Dict[str, Any] = None) -> List[Any]:
+    def execute(self, query: str, parameters: dict[str, Any] | None = None) -> list[Any]:
         pass

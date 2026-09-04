@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Path
-from app.interfaces import StorageInterface
+
 from app.dependencies import get_storage
+from app.interfaces import StorageInterface
 from app.utils import fetch_from_storage
 
 router = APIRouter(prefix="/quran", tags=["Quran Content"])

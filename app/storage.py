@@ -1,11 +1,12 @@
 import json
+
 import boto3
 import ydb
+from botocore.exceptions import BotoCoreError, ClientError
 
-from app.interfaces import YdbInterface
-from botocore.exceptions import ClientError
-from app.interfaces import StorageInterface
 from app.config import storageSettings, ydbSettings
+from app.interfaces import StorageInterface, YdbInterface
+
 
 class YandexS3Storage(StorageInterface):
     def __init__(self):
@@ -27,7 +28,7 @@ class YandexS3Storage(StorageInterface):
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             if error_code == "NoSuchKey":
                 raise FileNotFoundError(f"File '{file_path}' not found.")
-            raise RuntimeError(f"Cloud storage error: {str(e)}")
+            raise RuntimeError(f"Cloud storage error: {e!s}")
         except json.JSONDecodeError:
             raise ValueError(f"File '{file_path}' is not valid JSON.")
         
@@ -40,7 +41,7 @@ class YandexS3Storage(StorageInterface):
                 ExpiresIn=expires_in
             )
             return url
-        except Exception:
+        except (BotoCoreError, ClientError):
             return None
         
     
@@ -53,7 +54,7 @@ class YandexS3Storage(StorageInterface):
                 ContentType=content_type
             )
         except ClientError as e:
-            raise RuntimeError(f"Failed to upload file '{key}' to S3: {str(e)}")
+            raise RuntimeError(f"Failed to upload file '{key}' to S3: {e!s}")
         
 
 class YandexYdbStorage(YdbInterface):
@@ -73,7 +74,7 @@ class YandexYdbStorage(YdbInterface):
 
         self.pool = ydb.SessionPool(self.driver)
 
-    def execute(self, query: str, parameters: dict = None) -> list:
+    def execute(self, query: str, parameters: dict | None = None) -> list:
         def callee(session: ydb.Session):
             prepared = session.prepare(query)
             
