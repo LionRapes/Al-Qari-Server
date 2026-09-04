@@ -42,6 +42,15 @@ async def get_public_playlists(
     return service.get_public_playlists(limit, offset)
 
 
+@router.get("/search", summary="Search public playlists by title")
+async def search_public_playlists(
+    q: str = Query(..., min_length=1, max_length=100, description="Search keyword"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum results to return"),
+    service: PlaylistService = Depends(get_playlist_service)
+):
+    return service.search_public_playlists(q, limit)
+
+
 @router.get("/{playlist_id}", summary="Get a playlist by ID with owner data")
 async def get_playlist(
     playlist_id: str, 
@@ -67,15 +76,6 @@ async def get_user_owned_playlists(
     service: PlaylistService = Depends(get_playlist_service)
 ):
     return service.get_user_owned_playlists(user_id)
-
-
-@router.get("/search", summary="Search public playlists by title")
-async def search_public_playlists(
-    q: str = Query(..., min_length=1, max_length=100, description="Search keyword"),
-    limit: int = Query(20, ge=1, le=100, description="Maximum results to return"),
-    service: PlaylistService = Depends(get_playlist_service)
-):
-    return service.search_public_playlists(q, limit)
 
 
 @router.patch("/{playlist_id}", summary="Update a playlist")

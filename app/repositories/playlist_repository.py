@@ -87,11 +87,15 @@ class PlaylistRepository:
         where_conditions = ["p.is_public = true"] 
         params = {"$limit": limit}
 
+        word_conditions = []
         for i, word in enumerate(words):
             param_name = f"$word_{i}"
             declare_statements.append(f"DECLARE {param_name} AS Utf8;")
-            where_conditions.append(f"p.title ILIKE {param_name}") 
+            word_conditions.append(f"p.title ILIKE {param_name}")
             params[param_name] = f"%{word}%"
+
+        if word_conditions:
+            where_conditions.append(f"({" OR ".join(word_conditions)})")
 
         query = f"""
         {chr(10).join(declare_statements)}
