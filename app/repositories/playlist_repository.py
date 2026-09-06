@@ -1,13 +1,19 @@
+"""Repository module for managing playlist data, members, and share links in YDB."""
+
 from typing import Any
 
-from app.interfaces import YdbInterface
+from app.core.interfaces import YdbInterface
 
 
 class PlaylistRepository:
+    """Repository for managing playlist data, members, and share links in YDB."""
+
     def __init__(self, db: YdbInterface):
+        """Initializes the repository with a YDB database interface."""
         self.db = db
 
     def create_playlist(self, playlist_id: str, owner_id: str, title: str, data: str, is_public: bool) -> None:
+        """Creates a new playlist with the specified attributes and current timestamps."""
         query = """
         DECLARE $id AS Utf8;
         DECLARE $owner_id AS Utf8;
@@ -18,15 +24,19 @@ class PlaylistRepository:
         INSERT INTO playlists (id, owner_id, title, data, is_public, created_at, updated_at) 
         VALUES ($id, $owner_id, $title, $data, $is_public, CurrentUtcTimestamp(), CurrentUtcTimestamp());
         """
-        self.db.execute(query, {
-            "$id": playlist_id,
-            "$owner_id": owner_id,
-            "$title": title,
-            "$data": data,
-            "$is_public": is_public
-        })
+        self.db.execute(
+            query,
+            {
+                "$id": playlist_id,
+                "$owner_id": owner_id,
+                "$title": title,
+                "$data": data,
+                "$is_public": is_public,
+            },
+        )
 
     def get_playlist_by_id(self, playlist_id: str) -> dict[str, Any] | None:
+        """Retrieves a playlist by its ID, including owner details via a left join."""
         query = """
         DECLARE $id AS Utf8;
         SELECT 
@@ -40,6 +50,7 @@ class PlaylistRepository:
         return result[0] if result else None
 
     def get_public_playlists(self, limit: int, offset: int) -> list[dict[str, Any]]:
+        """Retrieves a paginated list of public playlists ordered by creation date."""
         query = """
         DECLARE $limit AS Uint64;
         DECLARE $offset AS Uint64;
@@ -56,6 +67,7 @@ class PlaylistRepository:
         return self.db.execute(query, {"$limit": limit, "$offset": offset}) or []
 
     def get_user_shared_playlists(self, user_id: str) -> list[dict[str, Any]]:
+        """Retrieves playlists shared with a specific user through membership records."""
         query = """
         DECLARE $user_id AS Utf8;
         SELECT 
@@ -70,6 +82,7 @@ class PlaylistRepository:
         return self.db.execute(query, {"$user_id": user_id}) or []
 
     def get_user_owned_playlists(self, user_id: str) -> list[dict[str, Any]]:
+        """Retrieves all playlists owned by a specific user."""
         query = """
         DECLARE $user_id AS Utf8;
         SELECT 
@@ -83,8 +96,9 @@ class PlaylistRepository:
         return self.db.execute(query, {"$user_id": user_id}) or []
 
     def search_public_playlists(self, words: list[str], limit: int) -> list[dict[str, Any]]:
+        """Searches public playlists matching a list of search words in their titles."""
         declare_statements = ["DECLARE $limit AS Uint64;"]
-        where_conditions = ["p.is_public = true"] 
+        where_conditions = ["p.is_public = true"]
         params = {"$limit": limit}
 
         word_conditions = []
@@ -95,7 +109,7 @@ class PlaylistRepository:
             params[param_name] = f"%{word}%"
 
         if word_conditions:
-            where_conditions.append(f"({" OR ".join(word_conditions)})")
+            where_conditions.append(f"({' OR '.join(word_conditions)})")
 
         query = f"""
         {chr(10).join(declare_statements)}
@@ -111,11 +125,13 @@ class PlaylistRepository:
         return self.db.execute(query, params) or []
 
     def get_raw_playlist(self, playlist_id: str) -> dict[str, Any] | None:
+        """Retrieves raw playlist fields (title, data, visibility, owner) by playlist ID."""
         query = "DECLARE $id AS Utf8; SELECT title, data, is_public, owner_id FROM playlists WHERE id = $id;"
         result = self.db.execute(query, {"$id": playlist_id})
         return result[0] if result else None
 
     def update_playlist(self, playlist_id: str, title: str, data: str, is_public: bool) -> None:
+        """Updates playlist content, visibility, and sets the updated timestamp."""
         query = """
         DECLARE $id AS Utf8;
         DECLARE $title AS Utf8;
@@ -129,18 +145,31 @@ class PlaylistRepository:
             updated_at = CurrentUtcTimestamp() 
         WHERE id = $id;
         """
-        self.db.execute(query, {
-            "$id": playlist_id,
-            "$title": title,
-            "$data": data,
-            "$is_public": is_public
-        })
+        self.db.execute(
+            query,
+            {
+                "$id": playlist_id,
+                "$title": title,
+                "$data": data,
+                "$is_public": is_public,
+            },
+        )
 
     def delete_playlist(self, playlist_id: str) -> None:
+        """Deletes a playlist by its ID."""
         query = "DECLARE $id AS Utf8; DELETE FROM playlists WHERE id = $id;"
         self.db.execute(query, {"$id": playlist_id})
 
-    def insert_forked_playlist(self, new_id: str, owner_id: str, title: str, data: str, is_public: bool, forked_from: str) -> None:
+    def insert_forked_playlist(
+        self,
+        new_id: str,
+        owner_id: str,
+        title: str,
+        data: str,
+        is_public: bool,
+        forked_from: str,
+    ) -> None:
+        """Inserts a new forked playlist tracking its original source playlist."""
         query = """
         DECLARE $id AS Utf8; DECLARE $owner_id AS Utf8; DECLARE $title AS Utf8;
         DECLARE $data AS Utf8; DECLARE $is_public AS Bool; DECLARE $forked_from AS Utf8;
@@ -148,16 +177,20 @@ class PlaylistRepository:
         INSERT INTO playlists (id, owner_id, title, data, is_public, forked_from_id, created_at, updated_at) 
         VALUES ($id, $owner_id, $title, $data, $is_public, $forked_from, CurrentUtcTimestamp(), CurrentUtcTimestamp());
         """
-        self.db.execute(query, {
-            "$id": new_id,
-            "$owner_id": owner_id,
-            "$title": title,
-            "$data": data,
-            "$is_public": is_public,
-            "$forked_from": forked_from
-        })
+        self.db.execute(
+            query,
+            {
+                "$id": new_id,
+                "$owner_id": owner_id,
+                "$title": title,
+                "$data": data,
+                "$is_public": is_public,
+                "$forked_from": forked_from,
+            },
+        )
 
     def create_share_link(self, token: str, playlist_id: str, role: str, expires_in_hours: int) -> None:
+        """Creates a timed share link token for a playlist with a specific role."""
         query = f"""
         DECLARE $token AS Utf8;
         DECLARE $playlist_id AS Utf8;
@@ -166,13 +199,10 @@ class PlaylistRepository:
         INSERT INTO playlist_share_links (token, playlist_id, role, expires_at, created_at) 
         VALUES ($token, $playlist_id, $role, CurrentUtcTimestamp() + Interval("PT{expires_in_hours}H"), CurrentUtcTimestamp());
         """
-        self.db.execute(query, {
-            "$token": token,
-            "$playlist_id": playlist_id,
-            "$role": role
-        })
+        self.db.execute(query, {"$token": token, "$playlist_id": playlist_id, "$role": role})
 
     def remove_playlist_member(self, playlist_id: str, user_id: str) -> None:
+        """Removes a user member from a playlist."""
         query = """
         DECLARE $playlist_id AS Utf8;
         DECLARE $user_id AS Utf8;
@@ -182,6 +212,7 @@ class PlaylistRepository:
         self.db.execute(query, {"$playlist_id": playlist_id, "$user_id": user_id})
 
     def get_active_share_link(self, token: str) -> dict[str, Any] | None:
+        """Retrieves active share link details if the token hasn't expired."""
         query = """
         DECLARE $token AS Utf8;
         SELECT playlist_id, role FROM playlist_share_links 
@@ -191,10 +222,12 @@ class PlaylistRepository:
         return result[0] if result else None
 
     def delete_share_link(self, token: str) -> None:
+        """Deletes a share link by its token."""
         query = "DECLARE $token AS Utf8; DELETE FROM playlist_share_links WHERE token = $token;"
         self.db.execute(query, {"$token": token})
 
     def get_playlist_member(self, playlist_id: str, user_id: str) -> dict[str, Any] | None:
+        """Retrieves the membership details and role for a user in a specific playlist."""
         query = """
         DECLARE $playlist_id AS Utf8;
         DECLARE $user_id AS Utf8;
@@ -205,6 +238,7 @@ class PlaylistRepository:
         return result[0] if result else None
 
     def update_member_role(self, playlist_id: str, user_id: str, role: str) -> None:
+        """Updates a member's role within a playlist."""
         query = """
         DECLARE $playlist_id AS Utf8;
         DECLARE $user_id AS Utf8;
@@ -217,6 +251,7 @@ class PlaylistRepository:
         self.db.execute(query, {"$playlist_id": playlist_id, "$user_id": user_id, "$new_role": role})
 
     def add_playlist_member(self, playlist_id: str, user_id: str, role: str) -> None:
+        """Adds a new member with a specified role to a playlist."""
         query = """
         DECLARE $playlist_id AS Utf8;
         DECLARE $user_id AS Utf8;
@@ -228,6 +263,7 @@ class PlaylistRepository:
         self.db.execute(query, {"$playlist_id": playlist_id, "$user_id": user_id, "$role": role})
 
     def get_playlist_members_list(self, playlist_id: str) -> list[dict[str, Any]]:
+        """Retrieves a list of all members belonging to a playlist alongside user info."""
         query = """
         DECLARE $playlist_id AS Utf8;
         SELECT m.user_id, m.role, m.added_at, u.username, u.avatar_url

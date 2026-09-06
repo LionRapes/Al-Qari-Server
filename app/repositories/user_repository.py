@@ -1,15 +1,21 @@
+"""Repository module for managing users, and share magic links in YDB."""
+
 from typing import Any
 
 import ydb
 
-from app.interfaces import YdbInterface
+from app.core.interfaces import YdbInterface
 
 
 class UserRepository:
+    """Repository for managing user data and authentication magic links in YDB."""
+
     def __init__(self, db: YdbInterface):
+        """Initializes the repository with a YDB database interface."""
         self.db = db
 
     def create_magic_link(self, token: str, email: str) -> None:
+        """Creates a new magic link with a 15-minute expiration time."""
         query = """
         DECLARE $token AS Utf8;
         DECLARE $email AS Utf8;
@@ -23,6 +29,7 @@ class UserRepository:
             print(e)
 
     def get_magic_link(self, token: str) -> dict[str, Any] | None:
+        """Retrieves the email for a valid, non-expired magic link token."""
         query = """
         DECLARE $token AS Utf8;
         SELECT email FROM magic_links 
@@ -32,15 +39,18 @@ class UserRepository:
         return result[0] if result else None
 
     def delete_magic_link(self, token: str) -> None:
+        """Deletes a magic link record by its token."""
         query = "DECLARE $token AS Utf8; DELETE FROM magic_links WHERE token = $token;"
         self.db.execute(query, {"$token": token})
 
     def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        """Retrieves a user's ID and username by their email address."""
         query = "DECLARE $email AS Utf8; SELECT id, username FROM users WHERE email = $email;"
         result = self.db.execute(query, {"$email": email})
         return result[0] if result else None
 
     def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+        """Retrieves complete user details by their unique user ID."""
         query = """
         DECLARE $id AS Utf8;
         SELECT id, email, username, created_at, avatar_url FROM users WHERE id = $id;
@@ -49,34 +59,31 @@ class UserRepository:
         return result[0] if result else None
 
     def get_user_by_username(self, username: str) -> dict[str, Any] | None:
+        """Retrieves a user's ID by their username."""
         query = "DECLARE $username AS Utf8; SELECT id FROM users WHERE username = $username;"
         result = self.db.execute(query, {"$username": username})
         return result[0] if result else None
 
     def create_user(self, user_id: str, email: str, username: str) -> None:
+        """Creates a new user record with the current UTC timestamp."""
         query = """
         DECLARE $id AS Utf8; DECLARE $email AS Utf8; DECLARE $username AS Utf8;
         INSERT INTO users (id, email, username, created_at) 
         VALUES ($id, $email, $username, CurrentUtcTimestamp());
         """
-        self.db.execute(query, {
-            "$id": user_id,
-            "$email": email,
-            "$username": username
-        })
+        self.db.execute(query, {"$id": user_id, "$email": email, "$username": username})
 
     def update_username(self, user_id: str, username: str) -> None:
+        """Updates the username for a specified user ID."""
         query = """
         DECLARE $id AS Utf8;
         DECLARE $username AS Utf8;
         UPDATE users SET username = $username WHERE id = $id;
         """
-        self.db.execute(query, {
-            "$id": user_id,
-            "$username": username
-        })
+        self.db.execute(query, {"$id": user_id, "$username": username})
 
     def update_avatar(self, user_id: str, avatar_url: str) -> None:
+        """Updates the avatar URL for a specified user ID."""
         query = """
         DECLARE $id AS Utf8;
         DECLARE $avatar_url AS Utf8;
@@ -85,5 +92,6 @@ class UserRepository:
         self.db.execute(query, {"$id": user_id, "$avatar_url": avatar_url})
 
     def delete_user(self, user_id: str) -> None:
+        """Deletes a user record by their unique user ID."""
         query = "DECLARE $id AS Utf8; DELETE FROM users WHERE id = $id;"
         self.db.execute(query, {"$id": user_id})
