@@ -34,12 +34,12 @@ class EmailService:
     @staticmethod
     def send_magic_link_email(to_email: str, token: str, lang: str = "en") -> None:
         """Send an authentication magic link email to the user in their preferred language[cite: 9]."""
-        magic_link = f"{MAIL_SETTINGS.FRONTEND_BASE_URL}/auth/verify?token={token}"
+        magic_link = f"{MAIL_SETTINGS.frontend_base_url}/auth/verify?token={token}"
 
         t = EMAIL_TRANSLATIONS.get(lang, EMAIL_TRANSLATIONS["en"])
 
         msg = MIMEMultipart()
-        msg["From"] = MAIL_SETTINGS.SMTP_USER
+        msg["From"] = MAIL_SETTINGS.smtp_user
         msg["To"] = to_email
         msg["Subject"] = t["subject"]
 
@@ -47,8 +47,8 @@ class EmailService:
         msg.attach(MIMEText(body, "plain", "utf-8"))
 
         try:
-            with smtplib.SMTP_SSL(MAIL_SETTINGS.SMTP_HOST, MAIL_SETTINGS.SMTP_PORT) as server:
-                server.login(MAIL_SETTINGS.SMTP_USER, MAIL_SETTINGS.SMTP_PASSWORD)
-                server.sendmail(MAIL_SETTINGS.SMTP_USER, to_email, msg.as_string())
+            with smtplib.SMTP_SSL(MAIL_SETTINGS.smtp_host, MAIL_SETTINGS.smtp_port) as server:
+                server.login(MAIL_SETTINGS.smtp_user, MAIL_SETTINGS.smtp_password)
+                server.sendmail(MAIL_SETTINGS.smtp_user, to_email, msg.as_string())
         except smtplib.SMTPException as e:
             print(e)

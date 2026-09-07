@@ -58,7 +58,7 @@ class PlaylistRepository:
         SELECT 
             p.id, p.owner_id, p.title, p.data, p.is_public, p.forked_from_id, p.created_at, p.updated_at,
             u.username, u.avatar_url
-        FROM playlists AS p
+        FROM playlists VIEW playlists_public_created_idx AS p
         LEFT JOIN users AS u ON p.owner_id = u.id
         WHERE p.is_public = true
         ORDER BY p.created_at DESC
@@ -116,9 +116,10 @@ class PlaylistRepository:
         SELECT 
             p.id, p.owner_id, p.title, p.data, p.is_public, p.forked_from_id, p.created_at, p.updated_at,
             u.username, u.avatar_url
-        FROM playlists AS p
+        FROM playlists VIEW playlists_public_created_idx AS p
         LEFT JOIN users AS u ON p.owner_id = u.id
-        WHERE {" AND ".join(where_conditions)}
+        WHERE p.is_public = true 
+            AND (${" AND ".join(word_conditions)})
         ORDER BY p.created_at DESC
         LIMIT $limit;
         """

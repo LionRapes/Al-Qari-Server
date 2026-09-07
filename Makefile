@@ -3,6 +3,7 @@ CONTAINER_NAME = al-qari-server-container
 PORT = 8080
 REGISTRY_ID ?= 0
 TAG ?= latest
+APP_ENV ?= development
 
 .PHONY: build run dev stop clean logs
 
@@ -12,11 +13,14 @@ build:
 run:
 	docker run -d --name $(CONTAINER_NAME) -p $(PORT):8080 \
 	  --env-file .env \
+	  --env-file .env.production \
+	  -e APP_ENV=production \
 	  $(IMAGE_NAME)
 
 dev:
 	docker run -d --name $(CONTAINER_NAME)-dev -p $(PORT):8080 \
 	  --env-file .env \
+	  -e APP_ENV \
 	  -v $(CURDIR)/app:/code/app \
 	  $(IMAGE_NAME) \
 	  python -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload

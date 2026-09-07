@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 
-from app.api.deps import get_storage
+from app.api.deps.core import get_storage
 from app.core.interfaces import StorageInterface
 from app.core.utils import fetch_from_storage
 

@@ -16,12 +16,12 @@ class YandexS3Storage(StorageInterface):
         """Initialize the S3 client with configuration settings."""
         self.s3_client = boto3.client(
             "s3",
-            endpoint_url=STORAGE_SETTINGS.S3_ENDPOINT,
-            aws_access_key_id=STORAGE_SETTINGS.AWS_ACCESS_KEY,
-            aws_secret_access_key=STORAGE_SETTINGS.AWS_SECRET_KEY,
-            region_name=STORAGE_SETTINGS.REGION,
+            endpoint_url=STORAGE_SETTINGS.s3_endpoint,
+            aws_access_key_id=STORAGE_SETTINGS.aws_access_key,
+            aws_secret_access_key=STORAGE_SETTINGS.aws_secret_key,
+            region_name=STORAGE_SETTINGS.region,
         )
-        self.bucket = STORAGE_SETTINGS.BUCKET_NAME
+        self.bucket = STORAGE_SETTINGS.bucket_name
 
     def fetch_json(self, file_path: str) -> str:
         """Fetch and parse a JSON file from the S3 bucket."""

@@ -12,13 +12,13 @@ def create_access_token(user_id: str):
     """Generates a JWT access token with a 7-day expiration for a given user ID."""
     expire = datetime.now(timezone.utc) + timedelta(days=7)
     to_encode = {"sub": user_id, "exp": expire}
-    return jwt.encode(to_encode, JWT_SETTINGS.JWT_SECRET_KEY, algorithm=JWT_SETTINGS.ALGORITHM)
+    return jwt.encode(to_encode, JWT_SETTINGS.jwt_secret_key, algorithm=JWT_SETTINGS.algorithm)
 
 
 def decode_access_token(token: str) -> str:
     """Decodes and validates a JWT access token, returning the associated user ID."""
     try:
-        payload = jwt.decode(token, JWT_SETTINGS.JWT_SECRET_KEY, algorithms=[JWT_SETTINGS.ALGORITHM])
+        payload = jwt.decode(token, JWT_SETTINGS.jwt_secret_key, algorithms=[JWT_SETTINGS.algorithm])
         user_id: str | None = payload.get("sub")
 
         if user_id is None:

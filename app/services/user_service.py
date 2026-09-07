@@ -12,7 +12,9 @@ from app.core.config import STORAGE_SETTINGS
 from app.core.interfaces import StorageInterface
 from app.core.security import create_access_token
 from app.core.utils import ensure_str
+from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from app.schemas.user_schemas import *
 from app.services.email_service import EmailService
 
 
@@ -24,14 +26,13 @@ class UserService:
         self.repo = repo
         self.storage = storage
 
-    def request_magic_link(self, email: str, lang: str) -> dict:
+    def request_magic_link(self, email: str, lang: str) -> None:
         """Request a magic link token for email-based authentication."""
         token = str(uuid.uuid4())
         self.repo.create_magic_link(token, email)
         EmailService.send_magic_link_email(email, token, lang)
-        return {"message": "Magic link sent"}
 
-    def verify_magic_link(self, token: str) -> dict:
+    def verify_magic_link(self, token: str) -> TokenVerifyResponse:
         """Verify a magic link token, authenticate or register the user, and issue a JWT access token."""
         link_result = self.repo.get_magic_link(token)
 
@@ -53,28 +54,29 @@ class UserService:
         self.repo.delete_magic_link(token)
         access_token = create_access_token(user_id)
 
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user_id": user_id,
-            "is_new": is_new,
-        }
+        return TokenVerifyResponse(
+            access_token=access_token,
+            token_type="X-Auth-Token",
+            user_id=user_id,
+            is_new=is_new,
+        )
 
-    def get_user_profile(self, user_id: str) -> dict:
+    def get_user_profile(self, user_id: str) -> UserResponse:
         """Retrieve user profile information by user ID."""
-        user = self.repo.get_user_by_id(user_id)
-        if not user:
+        user_row = self.repo.get_user_by_id(user_id)
+        if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return {
-            "id": user["id"],
-            "email": ensure_str(user["email"]),
-            "username": ensure_str(user["username"]),
-            "avatar_url": ensure_str(user.get("avatar_url", "")),
-            "created_at": user["created_at"],
-        }
+        user_model = User(**user_row)
+        return UserResponse(
+            id=user_model.id,
+            email=user_model.email,
+            username=user_model.username,
+            avatar_url=user_model.avatar_url,
+            created_at=user_model.created_at,
+        )
 
-    def update_user_profile(self, user_id: str, current_user_id: str, username: str) -> dict:
+    def update_user_profile(self, user_id: str, current_user_id: str, username: str) -> None:
         """Update a user's profile username after verifying ownership and uniqueness."""
         if current_user_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own profile")
@@ -84,9 +86,8 @@ class UserService:
             raise HTTPException(status_code=400, detail="Username already taken")
 
         self.repo.update_username(user_id, username.strip()[:24])
-        return {"message": "Profile updated successfully"}
 
-    async def upload_user_avatar(self, user_id: str, current_user_id: str, file_content: bytes) -> dict:
+    async def upload_user_avatar(self, user_id: str, current_user_id: str, file_content: bytes) -> AvatarUploadResponse:
         """Process, optimize, and upload a user's avatar image to object storage."""
         if current_user_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own avatar")
@@ -106,11 +107,11 @@ class UserService:
             raise HTTPException(status_code=400, detail="Invalid image file format") from exc
 
         await self.storage.upload(file_path, optimized_content, content_type="image/webp")
-        public_url = f"{STORAGE_SETTINGS.S3_ENDPOINT}/{STORAGE_SETTINGS.BUCKET_NAME}/{file_path}"
+        public_url = f"{STORAGE_SETTINGS.s3_endpoint}/{STORAGE_SETTINGS.bucket_name}/{file_path}"
 
         self.repo.update_avatar(user_id, public_url)
 
-        return {"message": "Avatar updated", "avatar_url": public_url}
+        return AvatarUploadResponse(avatar_url=public_url)
 
     def delete_user_profile(self, user_id: str, current_user_id: str) -> None:
         """Delete a user account and profile after verifying ownership."""

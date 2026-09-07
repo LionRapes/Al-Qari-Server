@@ -1,56 +1,40 @@
 """API routes for managing playlists, including creation, sharing, member management, and search."""
 
-from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, status
 
-from app.api.deps import (
-    get_current_user,
-    get_optional_current_user,
-    get_playlist_service,
+from app.api.deps.auth import CURRENT_USER, OPTIONAL_CURRENT_USER
+from app.api.deps.services import PLAYLIST_SERVICE
+from app.schemas.playlist_schemas import (
+    JoinPlaylistResponse,
+    PaginatedPlaylistResponse,
+    PlaylistCreateRequest,
+    PlaylistCreateResponse,
+    PlaylistMembersListResponse,
+    PlaylistRelationResponse,
+    PlaylistResponse,
+    PlaylistUpdateRequest,
+    ShareLinkCreateRequest,
+    ShareLinkResponse,
+    UserPlaylistsResponse,
 )
 from app.services.playlist_service import PlaylistService
 
 router = APIRouter(prefix="/playlists", tags=["Playlists"])
 
-CURRENT_USER = Depends(get_current_user)
-OPTIONAL_CURRENT_USER = Depends(get_optional_current_user)
-PLAYLIST_SERVICE = Depends(get_playlist_service)
 
-
-class PlaylistCreate(BaseModel):
-    """Schema for creating a new playlist."""
-
-    title: str
-    data: str
-    is_public: bool = False
-
-
-class PlaylistUpdate(BaseModel):
-    """Schema for updating an existing playlist."""
-
-    title: str | None = None
-    data: str | None = None
-    is_public: bool | None = None
-
-
-class ShareLinkCreate(BaseModel):
-    """Schema for creating a playlist share link."""
-
-    role: str
-    expires_in_hours: int = 24
-
-
-@router.post("/", summary="Create a new playlist", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", summary="Create a new playlist", response_model=PlaylistCreateResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_playlist(
-    playlist: PlaylistCreate,
+    req: PlaylistCreateRequest,
     user_id: str = CURRENT_USER,
     service: PlaylistService = PLAYLIST_SERVICE,
 ):
     """Creates a new playlist for the authenticated user."""
-    return service.create_playlist(user_id, playlist)
+    return service.create_playlist(user_id, req)
 
 
-@router.get("/public", summary="Get paginated list of public playlists")
+@router.get("/public", summary="Get paginated list of public playlists", response_model=PaginatedPlaylistResponse)
 async def get_public_playlists(
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
@@ -60,7 +44,7 @@ async def get_public_playlists(
     return service.get_public_playlists(limit, offset)
 
 
-@router.get("/search", summary="Search public playlists by title")
+@router.get("/search", summary="Search public playlists by title", response_model=PaginatedPlaylistResponse)
 async def search_public_playlists(
     q: str = Query(..., min_length=1, max_length=100, description="Search keyword"),
     limit: int = Query(20, ge=1, le=100, description="Maximum results to return"),
@@ -70,7 +54,7 @@ async def search_public_playlists(
     return service.search_public_playlists(q, limit)
 
 
-@router.get("/{playlist_id}", summary="Get a playlist by ID with owner data")
+@router.get("/{playlist_id}", summary="Get a playlist by ID with owner data", response_model=PlaylistResponse)
 async def get_playlist(
     playlist_id: str,
     current_user_id: str | None = OPTIONAL_CURRENT_USER,
@@ -80,7 +64,9 @@ async def get_playlist(
     return service.get_playlist(playlist_id, current_user_id)
 
 
-@router.get("/user/{user_id}/shared", summary="Get all playlists shared with a user")
+@router.get(
+    "/user/{user_id}/shared", summary="Get all playlists shared with a user", response_model=UserPlaylistsResponse
+)
 async def get_user_shared_playlists(
     user_id: str,
     current_user_id: str = CURRENT_USER,
@@ -90,7 +76,7 @@ async def get_user_shared_playlists(
     return service.get_user_shared_playlists(user_id, current_user_id)
 
 
-@router.get("/user/{user_id}/owned", summary="Get all playlists owned by a user")
+@router.get("/user/{user_id}/owned", summary="Get all playlists owned by a user", response_model=UserPlaylistsResponse)
 async def get_user_owned_playlists(
     user_id: str,
     service: PlaylistService = PLAYLIST_SERVICE,
@@ -99,22 +85,18 @@ async def get_user_owned_playlists(
     return service.get_user_owned_playlists(user_id)
 
 
-@router.patch("/{playlist_id}", summary="Update a playlist")
+@router.patch("/{playlist_id}", summary="Update a playlist", status_code=status.HTTP_204_NO_CONTENT)
 async def update_playlist(
     playlist_id: str,
-    updates: PlaylistUpdate,
+    req: PlaylistUpdateRequest,
     current_user_id: str = CURRENT_USER,
     service: PlaylistService = PLAYLIST_SERVICE,
 ):
     """Updates an existing playlist by ID."""
-    return service.update_playlist(playlist_id, updates, current_user_id)
+    service.update_playlist(playlist_id, req, current_user_id)
 
 
-@router.delete(
-    "/{playlist_id}",
-    summary="Delete a playlist",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/{playlist_id}", summary="Delete a playlist", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_playlist(
     playlist_id: str,
     current_user_id: str = CURRENT_USER,
@@ -124,7 +106,7 @@ async def delete_playlist(
     service.delete_playlist(playlist_id, current_user_id)
 
 
-@router.post("/{playlist_id}/fork", summary="Fork a playlist")
+@router.post("/{playlist_id}/fork", summary="Fork a playlist", response_model=PlaylistCreateResponse)
 async def fork_playlist(
     playlist_id: str,
     current_user_id: str = CURRENT_USER,
@@ -134,10 +116,10 @@ async def fork_playlist(
     return service.fork_playlist(playlist_id, current_user_id)
 
 
-@router.post("/{playlist_id}/share", summary="Generate a shareable link")
+@router.post("/{playlist_id}/share", summary="Generate a shareable link", response_model=ShareLinkResponse)
 async def share_playlist(
     playlist_id: str,
-    req: ShareLinkCreate,
+    req: ShareLinkCreateRequest,
     current_user_id: str = CURRENT_USER,
     service: PlaylistService = PLAYLIST_SERVICE,
 ):
@@ -145,7 +127,11 @@ async def share_playlist(
     return service.share_playlist(playlist_id, req, current_user_id)
 
 
-@router.delete("/{playlist_id}/members/{target_user_id}", summary="Remove a member from a playlist")
+@router.delete(
+    "/{playlist_id}/members/{target_user_id}",
+    summary="Remove a member from a playlist",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def remove_playlist_member(
     playlist_id: str,
     target_user_id: str,
@@ -153,22 +139,28 @@ async def remove_playlist_member(
     service: PlaylistService = PLAYLIST_SERVICE,
 ):
     """Removes a member from a playlist."""
-    return service.remove_playlist_member(playlist_id, target_user_id, current_user_id)
+    service.remove_playlist_member(playlist_id, target_user_id, current_user_id)
 
 
-@router.post("/join/{token}", summary="Join a playlist via share token")
+@router.post("/join/{token}", summary="Join a playlist via share token", response_model=JoinPlaylistResponse)
 async def join_playlist_via_token(token: str, user_id: str = CURRENT_USER, service: PlaylistService = PLAYLIST_SERVICE):
     """Allows a user to join a playlist via a share token."""
     return service.join_playlist_via_token(token, user_id)
 
 
-@router.get("/{playlist_id}/members", summary="Get all members of a playlist")
+@router.get(
+    "/{playlist_id}/members", summary="Get all members of a playlist", response_model=PlaylistMembersListResponse
+)
 async def get_playlist_members(playlist_id: str, service: PlaylistService = PLAYLIST_SERVICE):
     """Retrieves all members of a playlist."""
     return service.get_playlist_members(playlist_id)
 
 
-@router.get("/{playlist_id}/members/{user_id}", summary="Get user's relation to a playlist")
+@router.get(
+    "/{playlist_id}/members/{user_id}",
+    summary="Get user's relation to a playlist",
+    response_model=PlaylistRelationResponse,
+)
 async def get_playlist_relation(playlist_id: str, user_id: str, service: PlaylistService = PLAYLIST_SERVICE):
     """Retrieves a user's specific relation/membership to a playlist."""
     return service.get_playlist_relation(playlist_id, user_id)
