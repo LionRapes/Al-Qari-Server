@@ -53,7 +53,7 @@ class UserRepository:
         """Retrieves complete user details by their unique user ID."""
         query = """
         DECLARE $id AS Utf8;
-        SELECT id, email, username, created_at, avatar_url FROM users WHERE id = $id;
+        SELECT id, email, username, created_at, avatar_url, role FROM users WHERE id = $id;
         """
         result = self.db.execute(query, {"$id": user_id})
         return result[0] if result else None
@@ -64,14 +64,14 @@ class UserRepository:
         result = self.db.execute(query, {"$username": username})
         return result[0] if result else None
 
-    def create_user(self, user_id: str, email: str, username: str) -> None:
+    def create_user(self, user_id: str, email: str, username: str, role: str = 'user') -> None:
         """Creates a new user record with the current UTC timestamp."""
         query = """
-        DECLARE $id AS Utf8; DECLARE $email AS Utf8; DECLARE $username AS Utf8;
-        INSERT INTO users (id, email, username, created_at) 
-        VALUES ($id, $email, $username, CurrentUtcTimestamp());
+        DECLARE $id AS Utf8; DECLARE $email AS Utf8; DECLARE $username AS Utf8; DECLARE $role AS Utf8;
+        INSERT INTO users (id, email, username, created_at, role) 
+        VALUES ($id, $email, $username, CurrentUtcTimestamp(), $role);
         """
-        self.db.execute(query, {"$id": user_id, "$email": email, "$username": username})
+        self.db.execute(query, {"$id": user_id, "$email": email, "$username": username, "$role": role})
 
     def update_username(self, user_id: str, username: str) -> None:
         """Updates the username for a specified user ID."""

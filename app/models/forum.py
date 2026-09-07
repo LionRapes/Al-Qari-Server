@@ -20,7 +20,7 @@ class Category(BaseModel):
     title: str
     slug: str
     description: str
-    created_at: datetime
+    created_at: int
 
 
 class Topic(BaseModel):
@@ -49,8 +49,8 @@ class Topic(BaseModel):
     views_count: int
     is_pinned: bool
     is_locked: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: int
+    updated_at: int
 
 
 class Post(BaseModel):
@@ -76,9 +76,9 @@ class Post(BaseModel):
     parent_post_id: str | None = None
     content_markdown: str
     is_edited: bool
-    edited_at: datetime | None = None
+    edited_at: int | None = None
     edited_by: str | None = None
-    created_at: datetime
+    created_at: int
 
 
 class ModerationLog(BaseModel):
@@ -102,4 +102,4 @@ class ModerationLog(BaseModel):
     target_id: str
     action: str
     reason: str
-    created_at: datetime
+    created_at: int

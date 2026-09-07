@@ -1,10 +1,9 @@
 """Schemas for managing playlist creation, updates, and share links."""
 
-from datetime import datetime
-
 from pydantic import BaseModel
 
 from app.models.playlist import PlaylistRole
+from app.schemas.common_schemas import Owner
 
 # REQUEST BODY
 
@@ -45,14 +44,6 @@ class MemberDetail(BaseModel):
     added_at: str | None = None
 
 
-class PlaylistOwner(BaseModel):
-    """Schema representing lightweight owner information for a playlist."""
-
-    id: str
-    username: str
-    avatar_url: str
-
-
 # RESPONSES
 
 
@@ -69,8 +60,12 @@ class PlaylistResponse(BaseModel):
     title: str
     data: str
     is_public: bool
-    owner: PlaylistOwner
-    created_at: datetime
+    forked_from_id: str | None
+    created_at: int
+    updated_at: int
+    owner: Owner
+    role: PlaylistRole | None = None
+    added_at: int | None = None
 
 
 class PaginatedPlaylistResponse(BaseModel):
@@ -117,4 +112,3 @@ class PlaylistRelationResponse(BaseModel):
     user_id: str
     role: PlaylistRole
     added_at: str | None = None
-

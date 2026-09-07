@@ -72,8 +72,9 @@ class UserService:
             id=user_model.id,
             email=user_model.email,
             username=user_model.username,
-            avatar_url=user_model.avatar_url,
             created_at=user_model.created_at,
+            avatar_url=user_model.avatar_url,
+            role=user_model.role
         )
 
     def update_user_profile(self, user_id: str, current_user_id: str, username: str) -> None:

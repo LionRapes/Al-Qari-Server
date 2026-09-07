@@ -1,13 +1,8 @@
-"""
-Schemas for forum operations including topics, posts, and moderation actions.
-
-This module defines the data transfer objects (DTOs) used for API requests
-and responses related to the forum system, including pagination cursors.
-"""
-
-from datetime import datetime
+"""Schemas for forum operations including topics, posts, and moderation actions."""
 
 from pydantic import BaseModel, Field
+
+from app.schemas.common_schemas import Owner
 
 # REQUEST BODY
 
@@ -38,28 +33,27 @@ class PostUpdateRequest(BaseModel):
 
 # RESPONSES
 
-
 class CategoryResponse(BaseModel):
     """Schema for category details."""
     id: str
     title: str
     slug: str
     description: str
-    created_at: datetime
+    created_at: int
 
 
 class TopicResponse(BaseModel):
     """Schema for full topic details."""
     id: str
     category_id: str
-    user_id: str
     title: str
     content_markdown: str
     views_count: int
     is_pinned: bool
     is_locked: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: int
+    updated_at: int
+    owner: Owner
 
 
 class PaginatedTopicsResponse(BaseModel):
@@ -72,13 +66,13 @@ class PostResponse(BaseModel):
     """Schema for post details."""
     id: str
     topic_id: str
-    user_id: str
     parent_post_id: str | None
     content_markdown: str
     is_edited: bool
-    edited_at: datetime | None
+    edited_at: int | None
     edited_by: str | None
-    created_at: datetime
+    created_at: int
+    owner: Owner
 
 
 class PaginatedPostsResponse(BaseModel):

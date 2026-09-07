@@ -4,7 +4,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from app.core.config import MAIL_SETTINGS
+from app.core.config import CORE_SETTINGS, MAIL_SETTINGS
 
 EMAIL_TRANSLATIONS = {
     "ru": {
@@ -34,7 +34,7 @@ class EmailService:
     @staticmethod
     def send_magic_link_email(to_email: str, token: str, lang: str = "en") -> None:
         """Send an authentication magic link email to the user in their preferred language[cite: 9]."""
-        magic_link = f"{MAIL_SETTINGS.frontend_base_url}/auth/verify?token={token}"
+        magic_link = f"{CORE_SETTINGS.frontend_base_url}/auth/verify?token={token}"
 
         t = EMAIL_TRANSLATIONS.get(lang, EMAIL_TRANSLATIONS["en"])
 

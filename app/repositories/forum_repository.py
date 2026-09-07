@@ -27,7 +27,7 @@ class ForumRepository:
     def get_categories(self) -> list[dict[str, Any]]:
         """
         Retrieves all forum categories sorted by creation date descending.
-                """
+        """
         query = """
         SELECT id, title, slug, description, created_at
         FROM categories
@@ -63,10 +63,26 @@ class ForumRepository:
         DECLARE $limit AS Uint32;
         DECLARE $cursor AS Timestamp;
 
-        SELECT id, category_id, user_id, title, content_markdown, views_count, is_pinned, is_locked, created_at, updated_at
-        FROM topics
-        WHERE category_id = $category_id AND created_at < $cursor
-        ORDER BY created_at DESC
+        SELECT 
+            t.id AS id,
+            t.category_id AS category_id,
+            t.title AS title,
+            t.content_markdown AS content_markdown,
+            t.views_count AS views_count,
+            t.is_pinned AS is_pinned,
+            t.is_locked AS is_locked,
+            t.created_at AS created_at,
+            t.updated_at AS updated_at,
+
+            AsStruct(
+                t.user_id AS owner_id,
+                u.username AS username,
+                u.avatar_url AS avatar_url
+            ) AS owner
+        FROM topics AS t
+        LEFT JOIN users AS u ON t.user_id = u.id
+        WHERE t.category_id = $category_id AND t.created_at < $cursor
+        ORDER BY t.created_at DESC
         LIMIT $limit;
         """
         if cursor:
@@ -74,12 +90,8 @@ class ForumRepository:
         else:
             cursor_val = datetime.now(timezone.utc)
 
-        params = {
-            "$category_id": category_id,
-            "$limit": limit,
-            "$cursor": cursor_val
-        }
-        
+        params = {"$category_id": category_id, "$limit": limit, "$cursor": cursor_val}
+
         return self.db.execute(query, params) or []
 
     def get_topic(self, topic_id: str) -> dict[str, Any] | None:
@@ -91,9 +103,26 @@ class ForumRepository:
         """
         query = """
         DECLARE $topic_id AS Utf8;
-        SELECT id, category_id, user_id, title, content_markdown, views_count, is_pinned, is_locked, created_at, updated_at
-        FROM topics
-        WHERE id = $topic_id;
+
+        SELECT 
+            t.id AS id,
+            t.category_id AS category_id,
+            t.title AS title,
+            t.content_markdown AS content_markdown,
+            t.views_count AS views_count,
+            t.is_pinned AS is_pinned,
+            t.is_locked AS is_locked,
+            t.created_at AS created_at,
+            t.updated_at AS updated_at,
+
+            AsStruct(
+                t.user_id AS owner_id,
+                u.username AS username,
+                u.avatar_url AS avatar_url
+            ) AS owner
+        FROM topics AS t
+        LEFT JOIN users AS u ON t.user_id = u.id
+        WHERE t.id = $topic_id;
         """
 
         result = self.db.execute(query, {"$topic_id": topic_id})
@@ -136,7 +165,7 @@ class ForumRepository:
             "$is_pinned": False,
             "$is_locked": False,
             "$created_at": now,
-            "$updated_at": now
+            "$updated_at": now,
         }
 
         self.db.execute(query, params)
@@ -182,7 +211,7 @@ class ForumRepository:
             "$moderator_id": moderator_id,
             "$target_type": "topic",
             "$action": action_type,
-            "$reason": getattr(mod_action, "reason", "Moderator action executed")
+            "$reason": getattr(mod_action, "reason", "Moderator action executed"),
         }
 
         self.db.execute(query, params)
@@ -201,21 +230,32 @@ class ForumRepository:
         DECLARE $limit AS Uint32;
         DECLARE $cursor AS Timestamp;
 
-        SELECT id, topic_id, user_id, parent_post_id, content_markdown, is_edited, edited_at, edited_by, created_at
-        FROM posts
-        WHERE topic_id = $topic_id AND created_at > $cursor
-        ORDER BY created_at ASC
+        SELECT 
+            p.id AS id,
+            p.topic_id AS topic_id,
+            p.parent_post_id AS parent_post_id,
+            p.content_markdown AS content_markdown,
+            p.is_edited AS is_edited,
+            p.edited_at AS edited_at,
+            p.edited_by AS edited_by,
+            p.created_at AS created_at,
+
+            AsStruct(
+                p.user_id AS owner_id,
+                u.username AS username,
+                u.avatar_url AS avatar_url
+            ) AS owner
+        FROM posts AS p
+        LEFT JOIN users AS u ON p.user_id = u.id
+        WHERE p.topic_id = $topic_id AND p.created_at < $cursor
+        ORDER BY p.created_at ASC
         LIMIT $limit;
         """
         if cursor:
             cursor_val = datetime.fromisoformat(cursor)
         else:
             cursor_val = datetime.now(timezone.utc)
-        params = {
-            "$topic_id": topic_id,
-            "$limit": limit,
-            "$cursor": cursor_val
-        }
+        params = {"$topic_id": topic_id, "$limit": limit, "$cursor": cursor_val}
 
         return self.db.execute(query, params)
 
@@ -228,11 +268,27 @@ class ForumRepository:
         """
         query = """
         DECLARE $post_id AS Utf8;
-        SELECT id, topic_id, user_id, parent_post_id, content_markdown, is_edited, edited_at, edited_by, created_at
-        FROM posts
-        WHERE id = $post_id;
+
+        SELECT 
+            p.id AS id,
+            p.topic_id AS topic_id,
+            p.parent_post_id AS parent_post_id,
+            p.content_markdown AS content_markdown,
+            p.is_edited AS is_edited,
+            p.edited_at AS edited_at,
+            p.edited_by AS edited_by,
+            p.created_at AS created_at,
+
+            AsStruct(
+                p.user_id AS owner_id,
+                u.username AS username,
+                u.avatar_url AS avatar_url
+            ) AS owner
+        FROM posts AS p
+        LEFT JOIN users AS u ON p.user_id = u.id
+        WHERE p.id = $post_id;
         """
-        result =  self.db.execute(query, {"$post_id": post_id})
+        result = self.db.execute(query, {"$post_id": post_id})
         return result[0] if result and len(result) > 0 else None
 
     def create_post(self, topic_id: str, user_id: str, post_in: PostCreateRequest) -> None:
@@ -266,7 +322,7 @@ class ForumRepository:
             "$parent_post_id": getattr(post_in, "parent_post_id", None),
             "$content_markdown": post_in.content,
             "$is_edited": False,
-            "$created_at": now
+            "$created_at": now,
         }
 
         self.db.execute(query, params)
@@ -297,8 +353,7 @@ class ForumRepository:
             "$content_markdown": post_update.content,
             "$is_edited": True,
             "$edited_at": now,
-            "$edited_by": editor_id
+            "$edited_by": editor_id,
         }
 
         self.db.execute(query, params)
-

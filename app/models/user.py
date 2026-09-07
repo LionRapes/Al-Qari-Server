@@ -17,6 +17,7 @@ class UserRole(str, Enum):
     """
 
     user = "user"
+    premium = "premium"
     moderator = "moderator"
     admin = "admin"
 
@@ -39,6 +40,6 @@ class User(BaseModel):
     id: str
     username: str
     email: EmailStr
-    created_at: datetime
+    created_at: int
     avatar_url: str | None = None
-    role: UserRole = UserRole.user
+    role: UserRole

@@ -1,7 +1,6 @@
 """Schemas for representing playlist entities and related membership/share-link
 metadata within the application."""
 
-from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
@@ -36,11 +35,12 @@ class Playlist(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    owner_id: str
     title: str
     data: str
     is_public: bool
-    created_at: datetime
+    forked_from_id: str
+    created_at: int
+    updated_at: int
 
 
 class PlaylistMember(BaseModel):
@@ -58,7 +58,7 @@ class PlaylistMember(BaseModel):
 
     playlist_id: str
     user_id: str
-    added_at: datetime
+    added_at: int
     role: PlaylistRole = PlaylistRole.viewer
 
 
@@ -77,6 +77,6 @@ class PlaylistShareLink(BaseModel):
 
     id: str
     playlist_id: str
-    role: str = "viewer"
-    expires_at: datetime | None = None
-    created_at: datetime
+    role: PlaylistRole = "viewer"
+    expires_at: int | None = None
+    created_at: int

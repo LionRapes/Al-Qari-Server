@@ -25,8 +25,7 @@ api_router.include_router(forum_router)
 app.include_router(api_router)
 
 cors = CORE_SETTINGS.cors_origins
-cors_headers = ["*", "X-Auth-Token", "Content-Type", "Accept"]
-
+cors_headers = ["X-Auth-Token", "Content-Type", "Accept"]
 if cors.startswith("^"):
     app.add_middleware(
         CORSMiddleware,

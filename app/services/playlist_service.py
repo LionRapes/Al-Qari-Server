@@ -247,7 +247,7 @@ def map_playlist_response(row: dict) -> dict:
         "created_at": row.get("p.created_at"),
         "updated_at": row.get("p.updated_at"),
         "owner": {
-            "id": ensure_str(row.get("p.owner_id", "")),
+            "owner_id": ensure_str(row.get("p.owner_id", "")),
             "username": ensure_str(row.get("u.username", "")),
             "avatar_url": ensure_str(row.get("u.avatar_url", "")),
         },

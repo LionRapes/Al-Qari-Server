@@ -1,8 +1,8 @@
 """Schemas for managing user authentication and profile updates."""
 
-from datetime import datetime
+from pydantic import BaseModel, EmailStr
 
-from pydantic import BaseModel, EmailStr, Field
+from app.models.user import UserRole
 
 # REQUEST BODY
 
@@ -60,11 +60,9 @@ class UserResponse(BaseModel):
     id: str
     email: EmailStr
     username: str
+    created_at: int
     avatar_url: str | None = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    role: UserRole
 
 
 class AvatarUploadResponse(BaseModel):

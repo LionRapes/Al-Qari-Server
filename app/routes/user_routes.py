@@ -61,7 +61,7 @@ async def upload_avatar(
 ):
     """Uploads and updates a user's avatar image."""
     file_content = await file.read()
-    return await service.upload_user_avatar(user_id, current_user_id, file_content)
+    return service.upload_user_avatar(user_id, current_user_id, file_content)
 
 
 @router.delete("/{user_id}", summary="Delete user profile", status_code=status.HTTP_204_NO_CONTENT)
