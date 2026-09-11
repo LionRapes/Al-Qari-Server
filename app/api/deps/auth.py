@@ -10,7 +10,7 @@ from fastapi.security import APIKeyHeader
 
 from app.api.deps.repositories import get_user_repository
 from app.core.security import decode_access_token
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.repositories.user_repository import UserRepository
 
 token_header = APIKeyHeader(name="X-Auth-Token", auto_error=False)
@@ -68,10 +68,7 @@ async def get_current_moderator(
     """
     Dependency to verify the current active user is a moderator.
     """
-    is_mod = getattr(current_user, "role", None) == 'moderator' 
-    is_admin = getattr(current_user, "role", None) == 'admin'
-    
-    if not (is_mod or is_admin):
+    if current_user.role not in UserRole.staff():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges."

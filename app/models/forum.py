@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict
+
+from app.schemas.common_schemas import Owner
 
 
 class Category(BaseModel):
@@ -45,12 +45,16 @@ class Topic(BaseModel):
     category_id: str
     user_id: str
     title: str
-    content_markdown: str
     views_count: int
     is_pinned: bool
     is_locked: bool
     created_at: int
     updated_at: int
+
+
+class TopicDetails(Topic):
+    """Extended topic model including owner information."""
+    owner: Owner | None = None
 
 
 class Post(BaseModel):
@@ -79,6 +83,11 @@ class Post(BaseModel):
     edited_at: int | None = None
     edited_by: str | None = None
     created_at: int
+    
+    
+class PostDetails(Post):
+    """Extended post model including owner information."""
+    owner: Owner | None = None
 
 
 class ModerationLog(BaseModel):

@@ -23,7 +23,7 @@ class TopicModerateRequest(BaseModel):
 class PostCreateRequest(BaseModel):
     """Schema for creating a new post."""
     content: str = Field(..., min_length=5, max_length=10000, description="Markdown reply content.")
-    parent_post_id: str | None = Field(None, description="Optional ID for threaded nested replies.")
+    parent_post_id: str | None = None
 
 
 class PostUpdateRequest(BaseModel):
@@ -40,6 +40,7 @@ class CategoryResponse(BaseModel):
     slug: str
     description: str
     created_at: int
+    is_restricted: bool = False
 
 
 class TopicResponse(BaseModel):
@@ -47,19 +48,18 @@ class TopicResponse(BaseModel):
     id: str
     category_id: str
     title: str
-    content_markdown: str
     views_count: int
     is_pinned: bool
     is_locked: bool
     created_at: int
     updated_at: int
-    owner: Owner
+    owner: Owner | None = None
 
 
 class PaginatedTopicsResponse(BaseModel):
     """Schema for a paginated list of topics."""
     items: list[TopicResponse]
-    next_cursor: str | None
+    next_cursor: int | None
 
 
 class PostResponse(BaseModel):
@@ -72,11 +72,11 @@ class PostResponse(BaseModel):
     edited_at: int | None
     edited_by: str | None
     created_at: int
-    owner: Owner
+    owner: Owner | None = None
 
 
 class PaginatedPostsResponse(BaseModel):
     """Schema for a paginated list of posts."""
     items: list[PostResponse]
-    next_cursor: str | None
+    next_cursor: int | None
 

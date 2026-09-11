@@ -20,17 +20,6 @@ class EmailRequest(BaseModel):
     lang: str
 
 
-class TokenVerifyRequest(BaseModel):
-    """
-    Schema for verifying an authentication token.
-
-    Attributes:
-        token: One-time authentication token issued during login.
-    """
-
-    token: str
-
-
 class UserUpdateRequest(BaseModel):
     """
     Schema for updating a user's profile details.
@@ -58,11 +47,12 @@ class UserResponse(BaseModel):
     """Schema for public/private user profile viewing."""
 
     id: str
-    email: EmailStr
+    email: EmailStr | None = None
     username: str
     created_at: int
     avatar_url: str | None = None
     role: UserRole
+    is_banned: bool
 
 
 class AvatarUploadResponse(BaseModel):

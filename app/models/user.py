@@ -1,6 +1,5 @@
 """Schemas for managing user entities within the forum platform."""
 
-from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, EmailStr
@@ -20,6 +19,10 @@ class UserRole(str, Enum):
     premium = "premium"
     moderator = "moderator"
     admin = "admin"
+    
+    @classmethod
+    def staff(cls) -> set["UserRole"]:
+        return {cls.admin, cls.moderator}
 
 
 class User(BaseModel):
@@ -43,3 +46,20 @@ class User(BaseModel):
     created_at: int
     avatar_url: str | None = None
     role: UserRole
+    is_banned: bool
+    
+class MagicLink(BaseModel):
+    """
+    Core magic link schema used throughout the application.
+
+    Attributes:
+        token: Unique identifier of the link.
+        email: Email linked to the user.
+        expires_at: The date by which the link will expire.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    token: str
+    email: EmailStr
+    expires_at: int

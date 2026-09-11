@@ -31,19 +31,6 @@ class ShareLinkCreateRequest(BaseModel):
     expires_in_hours: int = 24
 
 
-# COMPONENTS
-
-
-class MemberDetail(BaseModel):
-    """Detailed member view including user profile data."""
-
-    user_id: str
-    role: PlaylistRole
-    username: str
-    avatar_url: str
-    added_at: str | None = None
-
-
 # RESPONSES
 
 
@@ -60,10 +47,11 @@ class PlaylistResponse(BaseModel):
     title: str
     data: str
     is_public: bool
-    forked_from_id: str | None
+    forked_from_id: str | None = None
     created_at: int
     updated_at: int
-    owner: Owner
+    
+    owner: Owner | None = None
     role: PlaylistRole | None = None
     added_at: int | None = None
 
@@ -74,7 +62,7 @@ class PaginatedPlaylistResponse(BaseModel):
     limit: int
     offset: int | None = None
     query: str | None = None
-    playlists: list
+    playlists: list[PlaylistResponse]
 
 
 class UserPlaylistsResponse(BaseModel):
@@ -88,7 +76,6 @@ class ShareLinkResponse(BaseModel):
     """Schema for returning a generated playlist share link."""
 
     share_token: str
-    expires_in_hours: int
 
 
 class JoinPlaylistResponse(BaseModel):
@@ -98,11 +85,21 @@ class JoinPlaylistResponse(BaseModel):
     role: PlaylistRole
 
 
+class PlaylistMemberResponse(BaseModel):
+    """Detailed member view including user profile data."""
+    
+    playlist_id: str
+    role: PlaylistRole
+    added_at: str
+
+    user: Owner | None = None
+
+
 class PlaylistMembersListResponse(BaseModel):
     """Schema for returning a list of members of a playlist."""
 
     playlist_id: str
-    members: list[MemberDetail]
+    members: list[PlaylistMemberResponse]
 
 
 class PlaylistRelationResponse(BaseModel):

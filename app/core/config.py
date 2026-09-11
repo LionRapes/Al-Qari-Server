@@ -42,7 +42,7 @@ class YDBSettings(BaseConfig):
     
     ydb_database: str = ""
     ydb_endpoint: str = "grpcs://ydb.serverless.yandexcloud.net:2135"
-    ydb_service_account_key_file: str
+    ydb_service_account_key_file: str = 'secrets/keys/authorized_key.json'
 
 
 class MailSettings(BaseConfig):

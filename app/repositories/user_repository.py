@@ -1,5 +1,6 @@
 """Repository module for managing users, and share magic links in YDB."""
 
+import uuid
 from typing import Any
 
 import ydb
@@ -32,7 +33,12 @@ class UserRepository:
         """Retrieves the email for a valid, non-expired magic link token."""
         query = """
         DECLARE $token AS Utf8;
-        SELECT email FROM magic_links 
+        
+        SELECT
+            token,
+            email,
+            expires_at
+        FROM magic_links 
         WHERE token = $token AND expires_at > CurrentUtcTimestamp();
         """
         result = self.db.execute(query, {"$token": token})
@@ -44,8 +50,21 @@ class UserRepository:
         self.db.execute(query, {"$token": token})
 
     def get_user_by_email(self, email: str) -> dict[str, Any] | None:
-        """Retrieves a user's ID and username by their email address."""
-        query = "DECLARE $email AS Utf8; SELECT id, username FROM users WHERE email = $email;"
+        """Retrieves complete user details by their email."""
+        query = """
+        DECLARE $email AS Utf8;
+        
+        SELECT 
+            id, 
+            email, 
+            username, 
+            created_at, 
+            avatar_url, 
+            role,
+            is_banned
+        FROM users
+        WHERE email = $email;
+        """
         result = self.db.execute(query, {"$email": email})
         return result[0] if result else None
 
@@ -53,23 +72,50 @@ class UserRepository:
         """Retrieves complete user details by their unique user ID."""
         query = """
         DECLARE $id AS Utf8;
-        SELECT id, email, username, created_at, avatar_url, role FROM users WHERE id = $id;
+        
+        SELECT 
+            id, 
+            email, 
+            username, 
+            created_at, 
+            avatar_url, 
+            role,
+            is_banned
+        FROM users 
+        WHERE id = $id;
         """
         result = self.db.execute(query, {"$id": user_id})
         return result[0] if result else None
 
     def get_user_by_username(self, username: str) -> dict[str, Any] | None:
-        """Retrieves a user's ID by their username."""
-        query = "DECLARE $username AS Utf8; SELECT id FROM users WHERE username = $username;"
+        """Retrieves complete user details by their username."""
+        query = """
+        DECLARE $username AS Utf8;
+        
+        SELECT 
+            id, 
+            email, 
+            username, 
+            created_at, 
+            avatar_url, 
+            role,
+            is_banned
+        FROM users 
+        WHERE username = $username;
+        """
         result = self.db.execute(query, {"$username": username})
         return result[0] if result else None
 
-    def create_user(self, user_id: str, email: str, username: str, role: str = 'user') -> None:
+    def create_user(self, user_id: str, email: str, username: str, role: str = "user") -> None:
         """Creates a new user record with the current UTC timestamp."""
         query = """
-        DECLARE $id AS Utf8; DECLARE $email AS Utf8; DECLARE $username AS Utf8; DECLARE $role AS Utf8;
-        INSERT INTO users (id, email, username, created_at, role) 
-        VALUES ($id, $email, $username, CurrentUtcTimestamp(), $role);
+        DECLARE $id AS Utf8;
+        DECLARE $email AS Utf8;
+        DECLARE $username AS Utf8;
+        DECLARE $role AS Utf8;
+        
+        INSERT INTO users (id, email, username, created_at, role, is_banned) 
+        VALUES ($id, $email, $username, CurrentUtcTimestamp(), $role, false);
         """
         self.db.execute(query, {"$id": user_id, "$email": email, "$username": username, "$role": role})
 
@@ -78,6 +124,7 @@ class UserRepository:
         query = """
         DECLARE $id AS Utf8;
         DECLARE $username AS Utf8;
+        
         UPDATE users SET username = $username WHERE id = $id;
         """
         self.db.execute(query, {"$id": user_id, "$username": username})
@@ -87,6 +134,7 @@ class UserRepository:
         query = """
         DECLARE $id AS Utf8;
         DECLARE $avatar_url AS Utf8;
+        
         UPDATE users SET avatar_url = $avatar_url WHERE id = $id;
         """
         self.db.execute(query, {"$id": user_id, "$avatar_url": avatar_url})
@@ -95,3 +143,39 @@ class UserRepository:
         """Deletes a user record by their unique user ID."""
         query = "DECLARE $id AS Utf8; DELETE FROM users WHERE id = $id;"
         self.db.execute(query, {"$id": user_id})
+
+    def set_ban_status(self, user_id: str, banned: bool, moderator_id: str, reason: str, action: str) -> None:
+        """Sets user's ban status and logs the moderation action."""
+        log_id = str(uuid.uuid4())
+
+        query = """
+        DECLARE $user_id AS Utf8;
+        DECLARE $banned AS Bool;
+        
+        DECLARE $log_id AS Utf8;
+        DECLARE $moderator_id AS Utf8;
+        DECLARE $target_type AS Utf8;
+        DECLARE $action AS Utf8;
+        DECLARE $reason AS Utf8;
+
+        -- Update the ban status
+        UPDATE users
+        SET is_banned = $banned
+        WHERE id = $user_id;
+
+        -- Log the moderation action
+        UPSERT INTO moderation_logs (id, moderator_id, target_type, target_id, action, reason, created_at)
+        VALUES ($log_id, $moderator_id, $target_type, $user_id, $action, $reason, CurrentUtcTimestamp());
+        """
+
+        params = {
+            "$user_id": user_id,
+            "$banned": banned,
+            "$log_id": log_id,
+            "$moderator_id": moderator_id,
+            "$target_type": "user",
+            "$action": action,
+            "$reason": reason,
+        }
+
+        self.db.execute(query, params)

@@ -5,8 +5,8 @@ import uuid
 from fastapi import HTTPException, status
 
 from app.core.interfaces import YdbInterface
-from app.core.utils import ensure_str
-from app.models.playlist import Playlist, PlaylistMember, PlaylistShareLink
+from app.core.utils import validate_optional
+from app.models.playlist import Playlist, PlaylistDetails, PlaylistMember, PlaylistShareLink
 from app.repositories.playlist_repository import PlaylistRepository
 from app.schemas.playlist_schemas import *
 
@@ -18,57 +18,43 @@ class PlaylistService:
         self.repo = repo
         self.db = db
 
-    def create_playlist(self, user_id: str, playlist_data: PlaylistCreateRequest) -> PlaylistCreateResponse:
+    def create_playlist(self, user_id: str, req: PlaylistCreateRequest) -> PlaylistCreateResponse:
         """Create a new playlist owned by the specified user."""
         playlist_id = str(uuid.uuid4())
         self.repo.create_playlist(
-            playlist_id=playlist_id,
-            owner_id=user_id,
-            title=playlist_data.title.strip()[:32],
-            data=playlist_data.data,
-            is_public=playlist_data.is_public,
+            playlist_id,
+            user_id,
+            req.title.strip()[:32],
+            req.data,
+            req.is_public,
         )
         return PlaylistCreateResponse(playlist_id=playlist_id)
 
-    def get_playlist(self, playlist_id: str, current_user_id: str | None) -> PlaylistResponse:
-        """Retrieve a playlist by ID, verifying access permissions if private."""
-        playlist = self.repo.get_playlist_by_id(playlist_id)
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        if not playlist["p.is_public"]:
-            if not current_user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required for private playlists",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-            verify_playlist_access(self.db, playlist_id, current_user_id)
-
-        return PlaylistResponse(**map_playlist_response(playlist))
-
     def get_public_playlists(self, limit: int, offset: int) -> PaginatedPlaylistResponse:
         """Fetch a paginated list of public playlists."""
-        result = self.repo.get_public_playlists(limit, offset)
-
         return PaginatedPlaylistResponse(
             limit=limit,
             offset=offset,
-            playlists=[PlaylistResponse(**map_playlist_response(row)) for row in result],
+            playlists=[PlaylistResponse.model_validate(row) for row in self.repo.get_public_playlists(limit, offset)],
         )
 
-    def get_user_shared_playlists(self, user_id: str, current_user_id: str) -> UserPlaylistsResponse:
-        """Fetch playlists shared with a specific user."""
-        if current_user_id != user_id:
-            raise HTTPException(status_code=403, detail="Cannot view another user's shared playlists")
+    def get_user_shared_playlists(self, current_user_id: str) -> UserPlaylistsResponse:
+        """Fetch playlists shared with a current user."""
+        return UserPlaylistsResponse(
+            user_id=current_user_id,
+            playlists=[
+                PlaylistResponse.model_validate(row) for row in self.repo.get_user_shared_playlists(current_user_id)
+            ],
+        )
 
-        result = self.repo.get_user_shared_playlists(user_id)
-        return UserPlaylistsResponse(user_id=user_id, playlists=[map_playlist_response(row) for row in result])
-
-    def get_user_owned_playlists(self, user_id: str) -> UserPlaylistsResponse:
-        """Fetch playlists owned by a specific user."""
-        result = self.repo.get_user_owned_playlists(user_id)
-        return UserPlaylistsResponse(user_id=user_id, playlists=[map_playlist_response(row) for row in result])
+    def get_user_owned_playlists(self, current_user_id: str) -> UserPlaylistsResponse:
+        """Fetch playlists owned by a current user."""
+        return UserPlaylistsResponse(
+            user_id=current_user_id,
+            playlists=[
+                PlaylistResponse.model_validate(row) for row in self.repo.get_user_owned_playlists(current_user_id)
+            ],
+        )
 
     def search_public_playlists(self, q: str, limit: int) -> PaginatedPlaylistResponse:
         """Search through public playlists using query terms."""
@@ -80,182 +66,162 @@ class PlaylistService:
                 playlists=[],
             )
 
-        result = self.repo.search_public_playlists(words, limit)
         return PaginatedPlaylistResponse(
             query=q,
             limit=limit,
-            playlists=[PlaylistResponse(**map_playlist_response(row)) for row in result],
+            playlists=[PlaylistResponse.model_validate(row) for row in self.repo.search_public_playlists(words, limit)],
         )
+
+    def get_playlist(self, playlist_id: str, current_user_id: str | None) -> PlaylistResponse:
+        """Retrieve a playlist by ID, verifying access permissions if private."""
+        playlist = validate_optional(PlaylistDetails, self.repo.get_playlist_by_id(playlist_id))
+
+        if not playlist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist not found")
+
+        if not playlist.is_public:
+            if not current_user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required for private playlists",
+                )
+            verify_playlist_access(self.repo, playlist_id, current_user_id)
+
+        return PlaylistResponse.model_validate(playlist.model_dump())
 
     def update_playlist(self, playlist_id: str, req: PlaylistUpdateRequest, current_user_id: str) -> None:
         """Update an existing playlist after validating editor permissions."""
-        verify_playlist_access(self.db, playlist_id, current_user_id, require_editor=True)
+        verify_playlist_access(self.repo, playlist_id, current_user_id, require_editor=True)
 
-        current: Playlist = self.repo.get_raw_playlist(playlist_id)
-        if not current:
-            raise HTTPException(status_code=404, detail="Playlist not found")
+        playlist = validate_optional(Playlist, self.repo.get_raw_playlist(playlist_id))
+        if not playlist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist not found")
 
-        new_title = req.title if req.title is not None else current.title
-        new_data = req.data if req.data is not None else current.data
-        new_is_public = req.is_public if req.is_public is not None else current.is_public
+        new_title = req.title if req.title is not None else playlist.title
+        new_data = req.data if req.data is not None else playlist.data
+        new_is_public = req.is_public if req.is_public is not None else playlist.is_public
 
         self.repo.update_playlist(playlist_id, new_title, new_data, new_is_public)
 
     def delete_playlist(self, playlist_id: str, current_user_id: str) -> None:
         """Delete a playlist after verifying owner permissions."""
-        verify_playlist_access(self.db, playlist_id, current_user_id, require_owner=True)
+        verify_playlist_access(self.repo, playlist_id, current_user_id, require_owner=True)
         self.repo.delete_playlist(playlist_id)
 
     def fork_playlist(self, playlist_id: str, current_user_id: str) -> PlaylistCreateResponse:
         """Create a private copy (fork) of an existing playlist."""
-        original: Playlist = self.repo.get_raw_playlist(playlist_id)
-        if not original:
-            raise HTTPException(status_code=404, detail="Source playlist not found")
+        playlist = validate_optional(Playlist, self.repo.get_raw_playlist(playlist_id))
+        if not playlist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source playlist not found")
 
         new_id = str(uuid.uuid4())
-        self.repo.insert_forked_playlist(
-            new_id=new_id,
-            owner_id=current_user_id,
-            title=f"Copy of {original.title}",
-            data=original.data,
-            is_public=False,
-            forked_from=playlist_id,
+        self.repo.create_playlist(
+            new_id,
+            current_user_id,
+            f"Copy of {playlist.title}",
+            playlist.data,
+            False,
+            playlist_id,
         )
         return PlaylistCreateResponse(playlist_id=new_id)
 
     def share_playlist(self, playlist_id: str, req: ShareLinkCreateRequest, current_user_id: str) -> ShareLinkResponse:
         """Generate a shareable invitation token for a playlist."""
-        verify_playlist_access(self.db, playlist_id, current_user_id, require_owner=True)
+        verify_playlist_access(self.repo, playlist_id, current_user_id, require_owner=True)
 
         token = str(uuid.uuid4())
         self.repo.create_share_link(token, playlist_id, req.role, req.expires_in_hours)
-        return ShareLinkResponse(share_token=token, expires_in_hours=req.expires_in_hours)
+        return ShareLinkResponse(share_token=token)
+
+    
+    def join_playlist_via_token(self, token: str, user_id: str) -> JoinPlaylistResponse:
+        """Add a user to a playlist using an active share link token."""
+        share_link = validate_optional(PlaylistShareLink, self.repo.get_active_share_link(token))
+        if not share_link:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired invite link")
+
+        playlist = validate_optional(Playlist, self.repo.get_raw_playlist(share_link.playlist_id))
+        if not playlist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist is undefined")
+            
+        member = validate_optional(PlaylistMember, self.repo.get_playlist_member(playlist.id, user_id))
+        if member:
+            if member.role == share_link.role:
+                return JoinPlaylistResponse(playlist_id=playlist.id, role=member.role)
+
+            self.repo.update_member_role(playlist.id, user_id, share_link.role)
+            return JoinPlaylistResponse(playlist_id=playlist.id, role=share_link.role)
+
+        if playlist.owner_id == user_id:
+            raise HTTPException(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, detail="You can't join your own playlist")
+        
+        self.repo.add_playlist_member(playlist.id, user_id, share_link.role)
+        self.repo.delete_share_link(token)
+
+        return JoinPlaylistResponse(playlist_id=playlist.id, role=share_link.role)
+    
 
     def remove_playlist_member(self, playlist_id: str, target_user_id: str, current_user_id: str) -> None:
         """Remove a collaborator member from a playlist."""
-        verify_playlist_access(self.db, playlist_id, current_user_id, require_owner=True)
+        verify_playlist_access(self.repo, playlist_id, current_user_id, require_owner=True)
         self.repo.remove_playlist_member(playlist_id, target_user_id)
 
-    def join_playlist_via_token(self, token: str, user_id: str) -> JoinPlaylistResponse:
-        """Add a user to a playlist using an active share link token."""
-        token_data: PlaylistShareLink = self.repo.get_active_share_link(token)
-        if not token_data:
-            raise HTTPException(status_code=400, detail="Invalid or expired invite link")
-
-        playlist_id = token_data.playlist_id
-        token_role = getattr(token_data, "role", "viewer")
-
-        existing_member: PlaylistMember = self.repo.get_playlist_member(playlist_id, user_id)
-        if existing_member:
-            if existing_member.role == token_role:
-                return JoinPlaylistResponse(playlist_id=playlist_id, role=existing_member.role)
-
-            self.repo.update_member_role(playlist_id, user_id, token_role)
-            return JoinPlaylistResponse(playlist_id=playlist_id, role=token_role)
-
-        self.repo.add_playlist_member(playlist_id, user_id, token_role)
-        self.repo.delete_share_link(token)
-
-        return JoinPlaylistResponse(playlist_id=playlist_id, role=token_role)
 
     def get_playlist_members(self, playlist_id: str) -> PlaylistMembersListResponse:
         """Retrieve the list of members collaborating on a playlist."""
-        result = self.repo.get_playlist_members_list(playlist_id)
-        members = [
-            {
-                "user_id": ensure_str(row["m.user_id"]),
-                "role": ensure_str(row["m.role"]),
-                "username": ensure_str(row.get("u.username", "")),
-                "avatar_url": ensure_str(row.get("u.avatar_url", "")),
-                "added_at": row["m.added_at"],
-            }
-            for row in result
-        ]
-
-        return PlaylistMembersListResponse(playlist_id=playlist_id, members=members)
+        return PlaylistMembersListResponse(
+            playlist_id=playlist_id,
+            members=[
+                PlaylistMemberResponse.model_validate(row) for row in self.repo.get_playlist_members_list(playlist_id)
+            ],
+        )
+        
 
     def get_playlist_relation(self, playlist_id: str, user_id: str) -> PlaylistRelationResponse:
         """Determine a specific user's permission level relative to a playlist."""
-        playlist: Playlist = self.repo.get_raw_playlist(playlist_id)
-        if playlist and ensure_str(playlist.owner_id) == user_id:
-            return PlaylistRelationResponse(playlist_id=playlist_id, user_id=user_id, role="owner")
+        playlist = validate_optional(Playlist, self.repo.get_raw_playlist(playlist_id))
+        if playlist and playlist.owner_id == user_id:
+            return PlaylistRelationResponse(playlist_id=playlist_id, user_id=user_id, role=PlaylistRole.owner)
 
-        member: PlaylistMember = self.repo.get_playlist_member(playlist_id, user_id)
+        member = validate_optional(PlaylistMember, self.repo.get_playlist_member(playlist_id, user_id))
         if not member:
-            raise HTTPException(status_code=404, detail="User has no relation to this playlist")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User has no relation to this playlist")
 
         return PlaylistRelationResponse(
-            playlist_id=playlist_id, user_id=user_id, role=ensure_str(member.role), added_at=member.added_at
+            playlist_id=playlist_id, user_id=user_id, role=member.role, added_at=member.added_at
         )
 
 
 def verify_playlist_access(
-    db: YdbInterface,
+    repo: PlaylistRepository,
     playlist_id: str,
     user_id: str,
     require_owner: bool = False,
     require_editor: bool = False,
-) -> str:
+) -> PlaylistRole:
     """Verify if a user has sufficient permissions for a given playlist."""
-    playlist_query = "DECLARE $id AS Utf8; SELECT owner_id FROM playlists WHERE id = $id;"
-    playlist_res = db.execute(playlist_query, {"$id": playlist_id})
+    playlist = validate_optional(Playlist, repo.get_raw_playlist(playlist_id))
 
-    if not playlist_res:
-        raise HTTPException(status_code=404, detail="Playlist not found")
+    if not playlist:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playlist not found")
 
-    owner_id = ensure_str(playlist_res[0]["owner_id"])
-
-    if user_id == owner_id:
-        return "owner"
-
-    if require_owner:
+    if user_id == playlist.owner_id:
+        return PlaylistRole.owner
+    elif require_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the playlist owner can perform this action",
         )
 
-    member_query = """
-    DECLARE $playlist_id AS Utf8;
-    DECLARE $user_id AS Utf8;
-    SELECT role FROM playlist_members 
-    WHERE playlist_id = $playlist_id AND user_id = $user_id;
-    """
-    member_res = db.execute(member_query, {"$playlist_id": playlist_id, "$user_id": user_id})
+    member = validate_optional(PlaylistMember, repo.get_playlist_member(playlist_id, user_id))
 
-    if not member_res:
+    if not member:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    role = ensure_str(member_res[0]["role"])
-
-    if require_editor and role != "editor":
+    if require_editor and member.role != PlaylistRole.editor:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only owners or editors can perform this action",
         )
 
-    return role
-
-
-def map_playlist_response(row: dict) -> dict:
-    """Map raw database rows into a structured dictionary response for playlists."""
-    playlist = {
-        "id": ensure_str(row.get("p.id", "")),
-        "title": ensure_str(row.get("p.title", "")),
-        "data": ensure_str(row.get("p.data", "")),
-        "is_public": row.get("p.is_public", False),
-        "forked_from_id": ensure_str(row.get("p.forked_from_id", "")),
-        "created_at": row.get("p.created_at"),
-        "updated_at": row.get("p.updated_at"),
-        "owner": {
-            "owner_id": ensure_str(row.get("p.owner_id", "")),
-            "username": ensure_str(row.get("u.username", "")),
-            "avatar_url": ensure_str(row.get("u.avatar_url", "")),
-        },
-    }
-
-    if "p.role" in row:
-        playlist["role"] = ensure_str(row["p.role"])
-    if "p.added_at" in row:
-        playlist["added_at"] = row["p.added_at"]
-
-    return playlist
+    return member.role

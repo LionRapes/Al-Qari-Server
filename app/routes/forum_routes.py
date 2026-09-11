@@ -13,6 +13,7 @@ from app.schemas.forum_schemas import (
     PostUpdateRequest,
     TopicCreateRequest,
     TopicModerateRequest,
+    TopicResponse,
 )
 from app.services.forum_service import ForumService
 
@@ -28,10 +29,20 @@ async def get_categories(
     return service.get_categories()
 
 
+@router.get("/categories/{category_id}", response_model=CategoryResponse)
+async def get_category(
+    category_id: str,
+    _: str = CURRENT_USER,
+    service: ForumService = FORUM_SERVICE,
+):
+    """Fetch details of a single topic."""
+    return service.get_category(category_id)
+
+
 @router.get("/categories/{category_id}/topics", response_model=PaginatedTopicsResponse)
 async def get_topics(
     category_id: str,
-    cursor: str | None = Query(None, description="Timestamp cursor for pagination"),
+    cursor: int | None = Query(None, description="Timestamp cursor for pagination"),
     limit: int = Query(20, ge=1, le=100),
     _: str = CURRENT_USER,
     service: ForumService = FORUM_SERVICE,
@@ -40,15 +51,25 @@ async def get_topics(
     return service.get_topics(category_id, cursor, limit)
 
 
+@router.get("/topics/{topic_id}", response_model=TopicResponse)
+async def get_topic(
+    topic_id: str,
+    _: str = CURRENT_USER,
+    service: ForumService = FORUM_SERVICE,
+):
+    """Fetch details of a single topic."""
+    return service.get_topic(topic_id)
+
+
 @router.post("/categories/{category_id}/topics", status_code=status.HTTP_201_CREATED)
 async def create_topic(
     category_id: str,
     req: TopicCreateRequest,
-    current_user_id: str = CURRENT_USER,
+    current_user: User = CURRENT_ACTIVE_USER,
     service: ForumService = FORUM_SERVICE,
 ):
     """Create a new topic with initial Markdown content."""
-    service.create_topic(category_id, current_user_id, req)
+    service.create_topic(category_id, current_user, req)
 
 
 @router.patch("/topics/{topic_id}/moderate", status_code=status.HTTP_204_NO_CONTENT)
@@ -65,7 +86,7 @@ async def moderate_topic(
 @router.get("/topics/{topic_id}/posts", response_model=PaginatedPostsResponse)
 async def get_posts(
     topic_id: str,
-    cursor: str | None = Query(None, description="Timestamp cursor for pagination"),
+    cursor: int | None = Query(None, description="Timestamp cursor for pagination"),
     limit: int = Query(50, ge=1, le=100),
     _: str = CURRENT_USER,
     service: ForumService = FORUM_SERVICE,
@@ -78,11 +99,11 @@ async def get_posts(
 async def create_post(
     topic_id: str,
     req: PostCreateRequest,
-    current_user_id: str = CURRENT_USER,
+    current_user: User = CURRENT_ACTIVE_USER,
     service: ForumService = FORUM_SERVICE,
 ):
     """Reply to a topic using Markdown. Supports nested replies via parent_post_id."""
-    service.create_post(topic_id, current_user_id, req)
+    service.create_post(topic_id, current_user, req)
 
 
 @router.patch("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -94,3 +115,23 @@ async def edit_post(
 ):
     """Edit an existing post. Service layer will verify if the user owns the post or is a moderator."""
     service.edit_post(post_id, current_user, post_update)
+    
+@router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_post(
+    post_id: str,
+    reason: str | None = Query(None, description="Optional reason for deletion"),
+    current_moderator: User = CURRENT_MODERATOR,
+    service: ForumService = FORUM_SERVICE,
+):
+    """Delete an existing post and log the action. Restricted to moderators/admins."""
+    service.delete_post(post_id, current_moderator.id, reason)
+
+@router.delete("/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_topic(
+    topic_id: str,
+    reason: str | None = Query(None, description="Optional reason for deletion"),
+    current_moderator: User = CURRENT_MODERATOR,
+    service: ForumService = FORUM_SERVICE,
+):
+    """Delete a topic. Restricted to moderators/admins."""
+    service.delete_topic(topic_id, current_moderator.id, reason)

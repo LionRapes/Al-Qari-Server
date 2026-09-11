@@ -5,16 +5,19 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.common_schemas import Owner
+
 
 class PlaylistRole(str, Enum):
     """
     Enumeration of permission levels available to users.
 
     Roles define access rights across the forum:
+    - owner: playlist creator.
     - viewer: regular participant that can only read playlists track.
     - editor: special participant that can edit playlists track.
     """
-
+    owner = "owner"
     viewer = "viewer"
     editor = "editor"
 
@@ -30,17 +33,35 @@ class Playlist(BaseModel):
         data: Data of the playlist that contains all info about tracks
         is_public: Visibility flag indicating whether the playlist is public or private
         created_at: Timestamp when the playlist was created.
+        owner: Optional owner if repository return him
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    owner_id: str
     title: str
     data: str
     is_public: bool
-    forked_from_id: str
+    forked_from_id: str | None = None
     created_at: int
     updated_at: int
+    
+    
+class PlaylistDetails(Playlist):
+    """
+    Extended playlist schema that includes user‑specific access information.
+
+    This model builds on the base `Playlist` and adds contextual fields:
+    - owner: full owner profile, or None if the owner record is missing.
+    - role: the current user's access level relative to the playlist
+            (owner, editor, viewer), or None if the user has no relation.
+    - added_at: timestamp indicating when the user joined the playlist,
+                or None if the user is not a member.
+    """
+    owner: Owner | None = None
+    role: PlaylistRole | None = None
+    added_at: int | None = None
 
 
 class PlaylistMember(BaseModel):
@@ -58,8 +79,18 @@ class PlaylistMember(BaseModel):
 
     playlist_id: str
     user_id: str
+    role: PlaylistRole
     added_at: int
-    role: PlaylistRole = PlaylistRole.viewer
+    
+
+class PlaylistMemberDetails(PlaylistMember):
+    """
+    Extended playlist member schema that includes user‑specific access information.
+
+    This model builds on the base `PlaylistMember` and adds contextual fields:
+    - owner: full owner profile, or None if the owner record is missing.
+    """
+    user: Owner | None = None
 
 
 class PlaylistShareLink(BaseModel):
@@ -75,8 +106,7 @@ class PlaylistShareLink(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
     playlist_id: str
-    role: PlaylistRole = "viewer"
-    expires_at: int | None = None
+    role: PlaylistRole
+    expires_at: int
     created_at: int

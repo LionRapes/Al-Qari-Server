@@ -12,7 +12,9 @@ class PlaylistRepository:
         """Initializes the repository with a YDB database interface."""
         self.db = db
 
-    def create_playlist(self, playlist_id: str, owner_id: str, title: str, data: str, is_public: bool) -> None:
+    def create_playlist(
+        self, playlist_id: str, owner_id: str, title: str, data: str, is_public: bool, forked_from_id: str | None = None
+    ) -> None:
         """Creates a new playlist with the specified attributes and current timestamps."""
         query = """
         DECLARE $id AS Utf8;
@@ -20,9 +22,10 @@ class PlaylistRepository:
         DECLARE $title AS Utf8;
         DECLARE $data AS Utf8;
         DECLARE $is_public AS Bool;
+        DECLARE $forked_from_id AS Utf8?;
         
-        INSERT INTO playlists (id, owner_id, title, data, is_public, created_at, updated_at) 
-        VALUES ($id, $owner_id, $title, $data, $is_public, CurrentUtcTimestamp(), CurrentUtcTimestamp());
+        INSERT INTO playlists (id, owner_id, title, data, is_public, forked_from_id, created_at, updated_at) 
+        VALUES ($id, $owner_id, $title, $data, $is_public, $forked_from_id, CurrentUtcTimestamp(), CurrentUtcTimestamp());
         """
         self.db.execute(
             query,
@@ -32,22 +35,9 @@ class PlaylistRepository:
                 "$title": title,
                 "$data": data,
                 "$is_public": is_public,
+                "$forked_from_id": forked_from_id,
             },
         )
-
-    def get_playlist_by_id(self, playlist_id: str) -> dict[str, Any] | None:
-        """Retrieves a playlist by its ID, including owner details via a left join."""
-        query = """
-        DECLARE $id AS Utf8;
-        SELECT 
-            p.id, p.owner_id, p.title, p.data, p.is_public, p.forked_from_id, p.created_at, p.updated_at,
-            u.username, u.avatar_url
-        FROM playlists AS p
-        LEFT JOIN users AS u ON p.owner_id = u.id
-        WHERE p.id = $id;
-        """
-        result = self.db.execute(query, {"$id": playlist_id})
-        return result[0] if result else None
 
     def get_public_playlists(self, limit: int, offset: int) -> list[dict[str, Any]]:
         """Retrieves a paginated list of public playlists ordered by creation date."""
@@ -56,24 +46,97 @@ class PlaylistRepository:
         DECLARE $offset AS Uint64;
 
         SELECT 
-            p.id, p.owner_id, p.title, p.data, p.is_public, p.forked_from_id, p.created_at, p.updated_at,
-            u.username, u.avatar_url
-        FROM playlists VIEW playlists_public_created_idx AS p
+            -- Playlist fields
+            p.id AS id,
+            p.owner_id AS owner_id,
+            p.title AS title,
+            p.data AS data,
+            p.is_public AS is_public,
+            p.forked_from_id AS forked_from_id,
+            p.created_at AS created_at,
+            p.updated_at AS updated_at,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner
+
+        FROM playlists AS p
         LEFT JOIN users AS u ON p.owner_id = u.id
+
         WHERE p.is_public = true
         ORDER BY p.created_at DESC
         LIMIT $limit OFFSET $offset;
         """
         return self.db.execute(query, {"$limit": limit, "$offset": offset}) or []
 
+    def get_playlist_by_id(self, playlist_id: str) -> dict[str, Any] | None:
+        """Retrieves a playlist by its ID, including owner details via a left join."""
+        query = """
+        DECLARE $id AS Utf8;
+        
+        SELECT 
+            -- Playlist fields
+            p.id AS id,
+            p.owner_id AS owner_id,
+            p.title AS title,
+            p.data AS data,
+            p.is_public AS is_public,
+            p.forked_from_id AS forked_from_id,
+            p.created_at AS created_at,
+            p.updated_at AS updated_at,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner
+
+        FROM playlists AS p
+        LEFT JOIN users AS u ON p.owner_id = u.id
+        WHERE p.id = $id;
+        """
+        result = self.db.execute(query, {"$id": playlist_id})
+        return result[0] if result else None
+
     def get_user_shared_playlists(self, user_id: str) -> list[dict[str, Any]]:
         """Retrieves playlists shared with a specific user through membership records."""
         query = """
         DECLARE $user_id AS Utf8;
-        SELECT 
-            p.id, p.owner_id AS owner_id, p.title AS title,
-            p.is_public AS is_public, m.role AS role, m.added_at AS added_at,
-            u.username, u.avatar_url
+
+        SELECT
+            -- Playlist fields
+            p.id AS id,
+            p.owner_id AS owner_id,
+            p.title AS title,
+            p.data AS data,
+            p.is_public AS is_public,
+            p.forked_from_id AS forked_from_id,
+            p.created_at AS created_at,
+            p.updated_at AS updated_at,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner,
+            
+            m.role AS role,
+            m.added_at AS added_at
+
         FROM playlist_members AS m
         INNER JOIN playlists AS p ON m.playlist_id = p.id
         LEFT JOIN users AS u ON p.owner_id = u.id
@@ -85,10 +148,28 @@ class PlaylistRepository:
         """Retrieves all playlists owned by a specific user."""
         query = """
         DECLARE $user_id AS Utf8;
-        SELECT 
-            p.id, p.owner_id, p.title, p.data, p.is_public,
-            p.forked_from_id, p.created_at, p.updated_at,
-            u.username, u.avatar_url
+
+        SELECT
+            -- Playlist fields
+            p.id AS id,
+            p.owner_id AS owner_id,
+            p.title AS title,
+            p.data AS data,
+            p.is_public AS is_public,
+            p.forked_from_id AS forked_from_id,
+            p.created_at AS created_at,
+            p.updated_at AS updated_at,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner
+
         FROM playlists AS p
         LEFT JOIN users AS u ON p.owner_id = u.id
         WHERE p.owner_id = $user_id;
@@ -111,15 +192,35 @@ class PlaylistRepository:
         if word_conditions:
             where_conditions.append(f"({' OR '.join(word_conditions)})")
 
+        declares = "\n".join(declare_statements)
+        where_clause = " AND ".join(where_conditions)
+        
         query = f"""
-        {chr(10).join(declare_statements)}
+        {declares}
         SELECT 
-            p.id, p.owner_id, p.title, p.data, p.is_public, p.forked_from_id, p.created_at, p.updated_at,
-            u.username, u.avatar_url
-        FROM playlists VIEW playlists_public_created_idx AS p
+            -- Playlist fields
+            p.id AS id,
+            p.owner_id AS owner_id,
+            p.title AS title,
+            p.data AS data,
+            p.is_public AS is_public,
+            p.forked_from_id AS forked_from_id,
+            p.created_at AS created_at,
+            p.updated_at AS updated_at,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner
+            
+        FROM playlists AS p
         LEFT JOIN users AS u ON p.owner_id = u.id
-        WHERE p.is_public = true 
-            AND (${" AND ".join(word_conditions)})
+        WHERE {where_clause}
         ORDER BY p.created_at DESC
         LIMIT $limit;
         """
@@ -127,7 +228,23 @@ class PlaylistRepository:
 
     def get_raw_playlist(self, playlist_id: str) -> dict[str, Any] | None:
         """Retrieves raw playlist fields (title, data, visibility, owner) by playlist ID."""
-        query = "DECLARE $id AS Utf8; SELECT title, data, is_public, owner_id FROM playlists WHERE id = $id;"
+        query = """
+        DECLARE $id AS Utf8;
+        
+        SELECT
+            -- Playlist fields
+            id,
+            owner_id,
+            title,
+            data, 
+            is_public, 
+            forked_from_id,
+            created_at,
+            updated_at
+        
+        FROM playlists 
+        WHERE id = $id;
+        """
         result = self.db.execute(query, {"$id": playlist_id})
         return result[0] if result else None
 
@@ -144,6 +261,7 @@ class PlaylistRepository:
             data = $data, 
             is_public = $is_public, 
             updated_at = CurrentUtcTimestamp() 
+            
         WHERE id = $id;
         """
         self.db.execute(
@@ -160,35 +278,6 @@ class PlaylistRepository:
         """Deletes a playlist by its ID."""
         query = "DECLARE $id AS Utf8; DELETE FROM playlists WHERE id = $id;"
         self.db.execute(query, {"$id": playlist_id})
-
-    def insert_forked_playlist(
-        self,
-        new_id: str,
-        owner_id: str,
-        title: str,
-        data: str,
-        is_public: bool,
-        forked_from: str,
-    ) -> None:
-        """Inserts a new forked playlist tracking its original source playlist."""
-        query = """
-        DECLARE $id AS Utf8; DECLARE $owner_id AS Utf8; DECLARE $title AS Utf8;
-        DECLARE $data AS Utf8; DECLARE $is_public AS Bool; DECLARE $forked_from AS Utf8;
-        
-        INSERT INTO playlists (id, owner_id, title, data, is_public, forked_from_id, created_at, updated_at) 
-        VALUES ($id, $owner_id, $title, $data, $is_public, $forked_from, CurrentUtcTimestamp(), CurrentUtcTimestamp());
-        """
-        self.db.execute(
-            query,
-            {
-                "$id": new_id,
-                "$owner_id": owner_id,
-                "$title": title,
-                "$data": data,
-                "$is_public": is_public,
-                "$forked_from": forked_from,
-            },
-        )
 
     def create_share_link(self, token: str, playlist_id: str, role: str, expires_in_hours: int) -> None:
         """Creates a timed share link token for a playlist with a specific role."""
@@ -207,6 +296,7 @@ class PlaylistRepository:
         query = """
         DECLARE $playlist_id AS Utf8;
         DECLARE $user_id AS Utf8;
+        
         DELETE FROM playlist_members 
         WHERE playlist_id = $playlist_id AND user_id = $user_id;
         """
@@ -216,7 +306,14 @@ class PlaylistRepository:
         """Retrieves active share link details if the token hasn't expired."""
         query = """
         DECLARE $token AS Utf8;
-        SELECT playlist_id, role FROM playlist_share_links 
+        
+        SELECT 
+            playlist_id,
+            role,
+            expires_at,
+            created_at
+            
+        FROM playlist_share_links 
         WHERE token = $token AND expires_at > CurrentUtcTimestamp();
         """
         result = self.db.execute(query, {"$token": token})
@@ -232,8 +329,26 @@ class PlaylistRepository:
         query = """
         DECLARE $playlist_id AS Utf8;
         DECLARE $user_id AS Utf8;
-        SELECT role, added_at FROM playlist_members 
-        WHERE playlist_id = $playlist_id AND user_id = $user_id;
+
+        SELECT 
+            m.playlist_id AS playlist_id,
+            m.user_id AS user_id,
+            m.added_at AS added_at,
+            m.role AS role,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner
+
+        FROM playlist_members AS m
+        LEFT JOIN users AS u ON m.user_id = u.id
+        WHERE m.playlist_id = $playlist_id AND m.user_id = $user_id;
         """
         result = self.db.execute(query, {"$playlist_id": playlist_id, "$user_id": user_id})
         return result[0] if result else None
@@ -245,8 +360,9 @@ class PlaylistRepository:
         DECLARE $user_id AS Utf8;
         DECLARE $new_role AS Utf8;
         
-        UPDATE playlist_members 
-        SET role = $new_role 
+        UPDATE playlist_members SET 
+            role = $new_role 
+        
         WHERE playlist_id = $playlist_id AND user_id = $user_id;
         """
         self.db.execute(query, {"$playlist_id": playlist_id, "$user_id": user_id, "$new_role": role})
@@ -267,7 +383,23 @@ class PlaylistRepository:
         """Retrieves a list of all members belonging to a playlist alongside user info."""
         query = """
         DECLARE $playlist_id AS Utf8;
-        SELECT m.user_id, m.role, m.added_at, u.username, u.avatar_url
+        
+        SELECT 
+            m.playlist_id AS playlist_id,
+            m.user_id AS user_id,
+            m.added_at AS added_at,
+            m.role AS role,
+
+            -- Owner struct
+            CASE 
+                WHEN u.id IS NULL THEN NULL
+                ELSE AsStruct(
+                    u.id AS id,
+                    u.username AS username,
+                    u.avatar_url AS avatar_url
+                )
+            END AS owner
+
         FROM playlist_members AS m
         LEFT JOIN users AS u ON m.user_id = u.id
         WHERE m.playlist_id = $playlist_id;

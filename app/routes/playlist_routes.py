@@ -44,6 +44,26 @@ async def get_public_playlists(
     return service.get_public_playlists(limit, offset)
 
 
+@router.get(
+    "/shared", summary="Get all playlists shared with a user", response_model=UserPlaylistsResponse
+)
+async def get_user_shared_playlists(
+    current_user_id: str = CURRENT_USER,
+    service: PlaylistService = PLAYLIST_SERVICE,
+):
+    """Retrieves all playlists shared with the specified user."""
+    return service.get_user_shared_playlists(current_user_id)
+
+
+@router.get("/owned", summary="Get all playlists owned by a user", response_model=UserPlaylistsResponse)
+async def get_user_owned_playlists(
+    current_user_id: str = CURRENT_USER,
+    service: PlaylistService = PLAYLIST_SERVICE,
+):
+    """Retrieves all playlists owned by the user."""
+    return service.get_user_owned_playlists(current_user_id)
+
+
 @router.get("/search", summary="Search public playlists by title", response_model=PaginatedPlaylistResponse)
 async def search_public_playlists(
     q: str = Query(..., min_length=1, max_length=100, description="Search keyword"),
@@ -62,27 +82,6 @@ async def get_playlist(
 ):
     """Retrieves a specific playlist by ID with owner data."""
     return service.get_playlist(playlist_id, current_user_id)
-
-
-@router.get(
-    "/user/{user_id}/shared", summary="Get all playlists shared with a user", response_model=UserPlaylistsResponse
-)
-async def get_user_shared_playlists(
-    user_id: str,
-    current_user_id: str = CURRENT_USER,
-    service: PlaylistService = PLAYLIST_SERVICE,
-):
-    """Retrieves all playlists shared with the specified user."""
-    return service.get_user_shared_playlists(user_id, current_user_id)
-
-
-@router.get("/user/{user_id}/owned", summary="Get all playlists owned by a user", response_model=UserPlaylistsResponse)
-async def get_user_owned_playlists(
-    user_id: str,
-    service: PlaylistService = PLAYLIST_SERVICE,
-):
-    """Retrieves all playlists owned by the specified user."""
-    return service.get_user_owned_playlists(user_id)
 
 
 @router.patch("/{playlist_id}", summary="Update a playlist", status_code=status.HTTP_204_NO_CONTENT)
@@ -127,6 +126,12 @@ async def share_playlist(
     return service.share_playlist(playlist_id, req, current_user_id)
 
 
+@router.post("/join/{token}", summary="Join a playlist via share token", response_model=JoinPlaylistResponse)
+async def join_playlist_via_token(token: str, user_id: str = CURRENT_USER, service: PlaylistService = PLAYLIST_SERVICE):
+    """Allows a user to join a playlist via a share token."""
+    return service.join_playlist_via_token(token, user_id)
+
+
 @router.delete(
     "/{playlist_id}/members/{target_user_id}",
     summary="Remove a member from a playlist",
@@ -140,12 +145,6 @@ async def remove_playlist_member(
 ):
     """Removes a member from a playlist."""
     service.remove_playlist_member(playlist_id, target_user_id, current_user_id)
-
-
-@router.post("/join/{token}", summary="Join a playlist via share token", response_model=JoinPlaylistResponse)
-async def join_playlist_via_token(token: str, user_id: str = CURRENT_USER, service: PlaylistService = PLAYLIST_SERVICE):
-    """Allows a user to join a playlist via a share token."""
-    return service.join_playlist_via_token(token, user_id)
 
 
 @router.get(
